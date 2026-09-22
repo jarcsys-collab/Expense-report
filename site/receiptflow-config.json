@@ -1,0 +1,6 @@
+{
+  "_comment": "PUBLIC SETTINGS ONLY. Do not place API keys, passwords, tokens, service-role keys, or other secrets in this file.",
+  "receiptScanWebhookUrl": "",
+  "apiBaseUrl": "",
+  "timeoutMs": 60000
+}
