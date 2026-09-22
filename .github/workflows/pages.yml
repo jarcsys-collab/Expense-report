@@ -1,0 +1,47 @@
+# Manual GitHub Pages deployment for the prepared ReceiptFlow website.
+name: Publish ReceiptFlow frontend
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: receiptflow-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Read this repository
+        uses: actions/checkout@v6
+
+      - name: Check prepared website files
+        run: |
+          test -f site/index.html
+          test -f site/.nojekyll
+          test -f site/receiptflow-config.json
+          test -f site/assets/app.js
+          test -f site/assets/app.css
+          if find site -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.map' \) | grep -q .; then exit 1; fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload prepared website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Publish when manually requested
+        id: deployment
+        uses: actions/deploy-pages@v4
