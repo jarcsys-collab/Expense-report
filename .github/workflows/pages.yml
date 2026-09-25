@@ -1,6 +1,4 @@
-# Manual GitHub Pages deployment for the prepared ReceiptFlow website.
 name: Publish ReceiptFlow frontend
-
 on:
   workflow_dispatch:
 
@@ -24,24 +22,19 @@ jobs:
     steps:
       - name: Read this repository
         uses: actions/checkout@v6
-
-      - name: Check prepared website files
+      - name: Check prepared files
         run: |
           test -f site/index.html
           test -f site/.nojekyll
-          test -f site/receiptflow-config.json
-          test -f site/assets/app.js
-          test -f site/assets/app.css
+          test -f site/manifest.webmanifest
+          if grep -Eq 'src/main|\.tsx?(["?])' site/index.html; then exit 1; fi
           if find site -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.map' \) | grep -q .; then exit 1; fi
-
       - name: Configure Pages
         uses: actions/configure-pages@v5
-
-      - name: Upload prepared website
+      - name: Upload the prepared website
         uses: actions/upload-pages-artifact@v4
         with:
           path: site
-
       - name: Publish when manually requested
         id: deployment
         uses: actions/deploy-pages@v4
