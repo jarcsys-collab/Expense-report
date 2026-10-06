@@ -151,7 +151,11 @@ export function ReceiptUploader() {
         <div className="upload-queue">
           {queue.length ? (
             queue.map((item) => (
-              <div key={item.id} className="queue-item">
+              <div
+                key={item.id}
+                className="queue-item"
+                data-status={item.status}
+              >
                 <div>
                   <FileThumbnail file={item.files[0]} />
                   <span title={item.files[0].name}>
@@ -160,7 +164,7 @@ export function ReceiptUploader() {
                       ? ` + ${item.files.length - 1} sections`
                       : ""}
                   </span>
-                  <small>{item.status}</small>
+                  <small className="queue-status">{item.status}</small>
                   {item.status === "Failed" ? (
                     <button
                       className="icon-button"

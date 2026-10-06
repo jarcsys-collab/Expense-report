@@ -78,7 +78,7 @@ export async function apiRequest(path, method = "GET", body, options = {}) {
       } catch {}
       throw new ApiError(
         response.status === 401
-          ? "Your session expired. Sign in through your organization."
+          ? "You’re signed out. Sign in to continue."
           : errorMessage ||
               `Request failed (${response.status}). Please retry.`,
         response.status,

@@ -99,16 +99,20 @@ export function Sidebar() {
           <span className="rail-label">Collapse menu</span>
         </button>
         <nav id="mobile-rail-links" aria-label="Workspace navigation">
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, short, phone, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               aria-label={label}
               title={label}
+              data-phone={phone ? "true" : undefined}
               onClick={() => setExpanded(false)}
             >
               <Icon size={21} />
               <span className="rail-label">{label}</span>
+              <span className="rail-short" aria-hidden="true">
+                {short}
+              </span>
             </NavLink>
           ))}
         </nav>
@@ -127,6 +131,9 @@ export function Sidebar() {
                 ? user.email || user.role.replaceAll("_", " ")
                 : "Workspace account"}
             </small>
+          </span>
+          <span className="rail-short" aria-hidden="true">
+            Profile
           </span>
         </NavLink>
       </aside>

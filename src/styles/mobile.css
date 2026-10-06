@@ -1,0 +1,521 @@
+/*
+ * Phone layout (< 640px) for the receipt scanning flow.
+ * Loaded after index.css. Everything except `.rail-short` is scoped to the
+ * phone breakpoint, so tablet (640-1023px) and desktop styles are unchanged.
+ * Colors use the existing theme tokens (light theme defines them; the
+ * fallbacks are the dark theme values).
+ */
+
+/* Short labels exist only for the phone bottom navigation. */
+.rail-short {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  :root {
+    --mobile-nav-height: 64px;
+    --mobile-gutter: 16px;
+  }
+
+  /* ---------- Single-column shell ---------- */
+  .app-shell {
+    display: block;
+  }
+  .main-shell,
+  .collapsed .main-shell {
+    width: 100%;
+    margin-left: 0;
+  }
+  main {
+    min-height: 0;
+    padding: 16px max(var(--mobile-gutter), env(safe-area-inset-right))
+      calc(var(--mobile-nav-height) + 28px + env(safe-area-inset-bottom))
+      max(var(--mobile-gutter), env(safe-area-inset-left));
+  }
+
+  /* ---------- Bottom navigation (replaces the left rail on phones) ---------- */
+  .mobile-rail,
+  .mobile-rail.expanded {
+    z-index: 60;
+    inset: auto 0 0 0;
+    width: 100%;
+    /* Exact height so the review bar, toasts and sticky action can sit right above it. */
+    box-sizing: border-box;
+    height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    padding: 4px max(6px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom))
+      max(6px, env(safe-area-inset-left));
+    border-right: 0;
+    border-top: 1px solid var(--theme-border, #2a3030);
+    overflow: visible;
+    transition: none;
+  }
+  .rail-brand,
+  .mobile-rail .rail-toggle,
+  .rail-backdrop {
+    display: none !important;
+  }
+  .mobile-rail nav {
+    flex: 1 1 auto;
+    flex-direction: row;
+    gap: 0;
+  }
+  /* Scan, Requests, (Approvals for approvers), Issues on the bar; the rest via Profile. */
+  .mobile-rail nav > a:not([data-phone]) {
+    display: none;
+  }
+  .mobile-rail nav > a,
+  .mobile-rail .rail-profile {
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    width: auto;
+    min-width: 0;
+    min-height: 52px;
+    margin: 0;
+    padding: 5px 2px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    font-size: 11px;
+  }
+  .mobile-rail nav > a[href="#/upload"] {
+    border: 0;
+  }
+  .mobile-rail nav > a.active,
+  .mobile-rail .rail-profile.active {
+    color: var(--theme-teal-ink, #5fd6d0);
+    background: var(--theme-control, #212a29);
+  }
+  .mobile-rail .rail-label,
+  .mobile-rail.expanded .rail-label {
+    display: none;
+  }
+  .mobile-rail .rail-short {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.1;
+  }
+  .mobile-rail .rail-profile .avatar {
+    width: 22px;
+    height: 22px;
+    font-size: 9px;
+  }
+  /* Keyboard open: give the screen back to the form. */
+  .keyboard-open .mobile-rail {
+    display: none;
+  }
+
+  /* ---------- Notifications: above the bottom bar, full width ---------- */
+  .toasts {
+    left: var(--mobile-gutter);
+    right: var(--mobile-gutter);
+    bottom: calc(var(--mobile-nav-height) + 12px + env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    transform: none;
+    align-items: stretch;
+  }
+  /* Review screen: keep notifications above the Save Draft / Submit bar. */
+  body:has(.review-screen) .toasts {
+    bottom: calc(var(--mobile-nav-height) + 80px + env(safe-area-inset-bottom));
+  }
+  .toast {
+    max-width: none;
+    padding: 11px 14px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  /* ---------- Page header ---------- */
+  .page-header {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .page-header > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .page-header .eyebrow {
+    display: none;
+  }
+  .page-header h1 {
+    font-size: 22px;
+    line-height: 1.2;
+  }
+  .page-header p {
+    margin-top: 4px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .page-header > .button {
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .workflow-strip {
+    gap: 8px 14px;
+    margin-bottom: 14px;
+    font-size: 12px;
+  }
+
+  /* ---------- Banners and errors: compact, with the action inline ---------- */
+  .offline {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 9px var(--mobile-gutter);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .offline a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    margin-left: auto;
+    padding: 0 12px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .error-state {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+  .error-state > svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+  }
+  .error-state > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .error-state strong {
+    font-size: 13px;
+  }
+  .error-state p {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .error-state .button {
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  /* ---------- Capture card ---------- */
+  .upload-hero {
+    /* clip (not hidden) so the sticky review action follows the viewport */
+    overflow: clip;
+    gap: 14px;
+    margin-bottom: 22px;
+    padding: 14px;
+    border-radius: 14px;
+  }
+  .dropzone {
+    min-height: 0;
+    gap: 10px;
+    padding: 20px 14px 16px;
+    border-radius: 12px;
+  }
+  .upload-symbol {
+    margin-bottom: 0;
+    transform: scale(0.85);
+  }
+  .dropzone strong.mobile-upload-text {
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .capture-hint {
+    max-width: 30ch;
+    margin: 0 auto 4px;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+  }
+  .camera-button {
+    width: 100%;
+    min-height: 52px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .dropzone .mobile-file-options {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    margin: 2px 0 0;
+  }
+  .dropzone .mobile-file-options button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    min-height: 46px;
+    padding: 0 8px;
+    border: 1px solid var(--theme-border, #2f3a3a);
+    border-radius: 12px;
+    background: var(--theme-control, #212a29);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .dropzone small {
+    margin-top: 2px;
+    font-size: 11px;
+    opacity: 0.75;
+  }
+
+  /* ---------- Upload item cards ---------- */
+  .upload-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .queue-item {
+    margin: 0;
+    padding: 10px 10px 12px 12px;
+    border: 1px solid var(--theme-border, #2f3a3a);
+    border-radius: 12px;
+    background: var(--theme-control, #1d2424);
+  }
+  .queue-item > div:first-child {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 44px 44px;
+    grid-template-areas:
+      "thumb name action remove"
+      "thumb status action remove";
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 3px;
+    flex-wrap: nowrap;
+    font-size: 13px;
+  }
+  .queue-item > div:first-child > :first-child {
+    grid-area: thumb;
+    width: 34px;
+    height: 44px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+  .queue-item > div:first-child > span {
+    grid-area: name;
+    min-width: 0;
+    font-weight: 600;
+  }
+  .queue-item > div:first-child > :nth-child(4) {
+    grid-area: action;
+    justify-self: center;
+  }
+  .queue-item > div:first-child > :last-child {
+    grid-area: remove;
+    justify-self: center;
+    color: var(--theme-muted, #98abaa);
+  }
+  /* Retry / review: outlined so it reads as the item's main action; remove stays quiet. */
+  .queue-item > div:first-child > button:nth-child(4) {
+    border: 1px solid var(--theme-border, #34504e);
+    color: var(--theme-teal-ink, #5fd6d0);
+  }
+  .queue-item .icon-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+  .queue-status {
+    grid-area: status;
+    justify-self: start;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--theme-teal-bg, #1f3b37);
+    color: var(--theme-teal-ink, #9fe3dc);
+    font-size: 11px !important;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .queue-item[data-status="Ready"] .queue-status {
+    background: var(--theme-success-bg, #1f4434);
+    color: var(--theme-success-ink, #a6ebc9);
+  }
+  .queue-item[data-status="Needs Review"] .queue-status {
+    background: var(--theme-warning-bg, #4a3d24);
+    color: var(--theme-warning-ink, #f9dca0);
+  }
+  .queue-item[data-status="Failed"] .queue-status {
+    background: var(--theme-danger-bg, #4d2a2e);
+    color: var(--theme-danger-ink, #ffc9c9);
+  }
+  .queue-item .progress {
+    height: 4px;
+    margin-top: 10px;
+    border-radius: 999px;
+  }
+  .queue-item[data-status="Failed"] .progress {
+    display: none;
+  }
+  .queue-item .queue-caption,
+  .queue-item .queue-error {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  /* ---------- Review action ---------- */
+  .queue-actions {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 8px;
+    margin: 2px 0 0;
+  }
+  .queue-actions > .light-button {
+    width: 100%;
+    min-height: 50px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .queue-actions > .light-button:disabled {
+    opacity: 1;
+    background: transparent;
+    border: 1px dashed var(--theme-border, #3a4646);
+    color: var(--theme-muted, #8a9a9a);
+    cursor: not-allowed;
+  }
+  .queue-actions > .light-button:not(:disabled) {
+    color: #fff;
+    background: #08a9ac;
+    border-color: #08a9ac;
+  }
+  /* Once something is ready, keep the action in reach while scrolling the queue. */
+  .queue-actions:has(> .light-button:not(:disabled)) {
+    position: sticky;
+    z-index: 20;
+    bottom: calc(var(--mobile-nav-height) + 10px + env(safe-area-inset-bottom));
+    padding: 8px 0 0;
+    background: var(--theme-panel, #1b2121);
+  }
+  .queue-actions .text-button {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .upload-queue > .queue-caption {
+    margin-top: 0;
+    font-size: 12px;
+  }
+
+  /* ---------- Requests list on the scan screen ---------- */
+  .operational-summary {
+    gap: 8px;
+  }
+  .page-footnote {
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  /* ---------- Review screen ---------- */
+  .review-screen main {
+    padding-bottom: calc(var(--mobile-nav-height) + 96px + env(safe-area-inset-bottom));
+  }
+  .review-footer {
+    left: 0;
+    right: 0;
+    bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+    gap: 10px;
+    padding: 10px var(--mobile-gutter);
+    border-radius: 0;
+  }
+  .keyboard-open .review-footer {
+    bottom: var(--keyboard-inset, 0px);
+  }
+  .review-footer .button {
+    flex: 1 1 0;
+    min-height: 48px;
+    font-size: 14px;
+  }
+  .review-health-bar {
+    gap: 6px 12px;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+  .review-layout {
+    gap: 14px;
+  }
+  .review-preview img {
+    max-width: 100%;
+    height: auto;
+  }
+  .form-panel {
+    padding: 14px;
+  }
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px; /* 16px stops iOS from zooming into focused inputs */
+  }
+  .field > span {
+    font-size: 12px;
+  }
+  .date-review-actions .text-button {
+    min-height: 40px;
+    font-size: 13px;
+  }
+  .check-finding p,
+  .check-scope {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  /* ---------- Empty and loading states ---------- */
+  .empty {
+    padding: 28px 12px;
+  }
+  .empty h3 {
+    font-size: 16px;
+  }
+  .empty p {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+}
+
+/* Smallest phones (around 320px). */
+@media (max-width: 359px) {
+  :root {
+    --mobile-gutter: 12px;
+  }
+  .mobile-rail nav > a,
+  .mobile-rail .rail-profile {
+    font-size: 10px;
+  }
+  .page-header h1 {
+    font-size: 20px;
+  }
+  .mobile-file-options button {
+    font-size: 12px;
+  }
+}
