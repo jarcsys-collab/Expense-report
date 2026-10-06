@@ -86,6 +86,16 @@ frontend calls the endpoints, and the API answers `404 NOT_FOUND`.
    which also depends on receipt file storage above.
 6. **Resolve finding** (Expense Issues page): `POST /api/expenses/:id/violations/:violationId/resolve`.
 
+## Deploy backend (Railway)
+
+- Service **Root Directory**: `/server`. Railpack reads `server/railpack.json` (Node provider,
+  `npm start` → `node src/server.js`), so the repo-root Vite app is never served instead.
+- Optional: set the service **Config File Path** to `/server/railway.json` (health check
+  `/api/health`, redeploy only on `/server/**` changes). Railway does not apply Root Directory to it.
+- The server listens on Railway's `PORT`; the public domain's target port must be that same port.
+- Set variables in Railway (not files): `NODE_ENV=production`, `MONGODB_URI`, `MONGODB_DB_NAME`,
+  `VERYFI_*`, `RECEIPT_DATE_ORDER`, `TRUST_PROXY=1`. Allow Railway's egress in Atlas Network Access.
+
 ## Deploy (GitHub Pages)
 
 The Pages workflow (`.github/workflows/pages.yml`, run manually) publishes the
