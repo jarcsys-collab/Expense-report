@@ -1,0 +1,26 @@
+{
+  "name": "receiptflow-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ReceiptFlow API: Express + MongoDB Atlas",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@veryfi/veryfi-sdk": "^1.5.2",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "mongoose": "^9.10.4",
+    "multer": "^2.4.0",
+    "zod": "^4.6.5"
+  }
+}

@@ -1,4 +1,22 @@
 {
+  "name": "receiptflow",
+  "private": true,
+  "version": "0.0.0",
   "type": "module",
-  "private": true
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:pages": "vite build --mode pages",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "0.468.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router-dom": "7.18.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.2"
+  }
 }
