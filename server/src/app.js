@@ -4,6 +4,7 @@ import { rateLimit } from "express-rate-limit";
 import helmet from "helmet";
 import { env } from "./config/env.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
+import { requireAuth } from "./middleware/requireAuth.js";
 import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { expensesRouter } from "./routes/expenses.js";
@@ -48,10 +49,11 @@ export function createApp() {
 
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);
-  app.use("/api/expenses", expensesRouter);
-  app.use("/api/categories", categoriesRouter);
-  app.use("/api/receipts", receiptsRouter);
-  app.use("/api/violations", violationsRouter);
+  // Everything except health and auth requires a signed-in session.
+  app.use("/api/expenses", requireAuth, expensesRouter);
+  app.use("/api/categories", requireAuth, categoriesRouter);
+  app.use("/api/receipts", requireAuth, receiptsRouter);
+  app.use("/api/violations", requireAuth, violationsRouter);
 
   app.use(notFound);
   app.use(errorHandler);

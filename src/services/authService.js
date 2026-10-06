@@ -4,7 +4,7 @@
 import { AUTH_ENDPOINTS } from "../config/api";
 import { config } from "../config/appConfig";
 import { asObject } from "../utils/values";
-import { apiRequest } from "./httpClient";
+import { ApiError, apiRequest } from "./httpClient";
 import { unwrapResponse } from "./normalizers";
 
 // Shown before sign-in or when no backend is connected.
@@ -92,6 +92,20 @@ export function signIn() {
     throw new Error("Organization sign-in is not configured.");
   }
   window.location.assign(config.signInUrl);
+}
+
+// POST /auth/login: TEMPORARY controlled-beta sign-in until Microsoft Entra ID.
+// The server sets an HttpOnly session cookie; the password is not stored anywhere
+// in the browser.
+export async function betaLogin(username, password) {
+  try {
+    await apiRequest(AUTH_ENDPOINTS.login, "POST", { username, password });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      throw new Error("Incorrect username or password.");
+    }
+    throw error;
+  }
 }
 
 // POST /auth/logout

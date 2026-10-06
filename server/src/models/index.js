@@ -2,4 +2,5 @@
 export { Category } from "./Category.js";
 export { Expense } from "./Expense.js";
 export { ReceiptJob } from "./ReceiptJob.js";
+export { Session } from "./Session.js";
 export { User } from "./User.js";

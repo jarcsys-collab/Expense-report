@@ -1,12 +1,12 @@
 import { useEffect } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { WifiOff } from "lucide-react";
 import { config } from "../../config/appConfig";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { Sidebar } from "./Sidebar";
 
 export function AppLayout() {
-  const { online } = useWorkspace();
+  const { online, authenticated, loading } = useWorkspace();
   const location = useLocation();
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -60,6 +60,11 @@ export function AppLayout() {
           <div className="offline" role="status">
             Workspace service is not configured. Records will appear after your
             organization connects its service.
+          </div>
+        )}
+        {config.apiBase && !authenticated && !loading && (
+          <div className="offline" role="status">
+            Sign in to use ReceiptFlow. <Link to="/profile">Sign in</Link>
           </div>
         )}
         <main key={location.pathname.split("/")[1]}>

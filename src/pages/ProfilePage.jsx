@@ -1,10 +1,27 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { config } from "../config/appConfig";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { signIn } from "../services/authService";
+import { betaLogin, signIn } from "../services/authService";
 
 export function ProfilePage() {
   const { user, authenticated, logout, run, busy, error, refresh } =
     useWorkspace();
+  // TEMPORARY controlled-beta sign-in (until Microsoft Entra ID). The password
+  // stays in memory only and is cleared after every attempt.
+  const betaSignIn = Boolean(config.apiBase) && !config.signInUrl;
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const submitBetaLogin = async (event) => {
+    event.preventDefault();
+    const entered = password;
+    setPassword("");
+    const signedIn = await run(async () => {
+      await betaLogin(username.trim(), entered);
+      return true;
+    }, "Signed in");
+    if (signedIn) await refresh();
+  };
   return (
     <>
       <header className="page-header">
@@ -33,6 +50,35 @@ export function ProfilePage() {
           >
             Sign out
           </button>
+        ) : betaSignIn ? (
+          <form onSubmit={submitBetaLogin} aria-label="Beta sign-in">
+            <label className="field">
+              Username
+              <input
+                name="username"
+                autoComplete="username"
+                required
+                value={username}
+                disabled={busy}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              Password
+              <input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                disabled={busy}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            <button className="button primary" disabled={busy}>
+              Sign In
+            </button>
+          </form>
         ) : (
           <button
             className="button"

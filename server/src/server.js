@@ -7,6 +7,10 @@ const server = app.listen(env.port, () => {
   console.info(`ReceiptFlow API listening on port ${env.port} (${env.nodeEnv})`);
   console.info(`Allowed origins: ${env.allowedOrigins.join(", ")}`);
   if (env.devAuthEnabled) console.warn("DEV_AUTH_ENABLED: /api/auth/session returns a local development user.");
+  if (env.betaAuth.enabled) console.info("Temporary beta sign-in is enabled (POST /api/auth/login).");
+  if (env.betaAuth.misconfigured) {
+    console.warn("BETA_AUTH_ENABLED is true but BETA_AUTH_USERNAME is empty or BETA_AUTH_PASSWORD is shorter than 12 characters: beta sign-in stays disabled.");
+  }
 });
 
 // Connect after listening so /api/health answers even while MongoDB is unreachable.

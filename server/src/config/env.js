@@ -29,6 +29,16 @@ const schema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   DEV_AUTH_ROLE: z.enum(["EMPLOYEE", "APPROVER", "FINANCE_ADMIN"]).default("FINANCE_ADMIN"),
+  // TEMPORARY controlled-beta sign-in (one shared account) until Microsoft Entra ID.
+  // Values live only in Railway Variables / server/.env; never sent to the frontend.
+  BETA_AUTH_ENABLED: z
+    .enum(["true", "false", ""])
+    .default("false")
+    .transform((value) => value === "true"),
+  BETA_AUTH_USERNAME: z.string().trim().default(""),
+  BETA_AUTH_PASSWORD: z.string().default(""),
+  BETA_AUTH_ROLE: z.enum(["EMPLOYEE", "APPROVER", "FINANCE_ADMIN"]).default("EMPLOYEE"),
+  BETA_SESSION_HOURS: z.coerce.number().int().min(1).max(72).default(12),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   // Veryfi OCR (backend only). All four credentials are required to enable OCR.
   VERYFI_CLIENT_ID: z.string().trim().default(""),
@@ -79,6 +89,15 @@ export const env = {
   ],
   devAuthEnabled: raw.DEV_AUTH_ENABLED && !isProduction,
   devAuthRole: raw.DEV_AUTH_ROLE,
+  betaAuth: {
+    // Active only with a username and a password of at least 12 characters.
+    enabled: raw.BETA_AUTH_ENABLED && Boolean(raw.BETA_AUTH_USERNAME) && raw.BETA_AUTH_PASSWORD.length >= 12,
+    misconfigured: raw.BETA_AUTH_ENABLED && (!raw.BETA_AUTH_USERNAME || raw.BETA_AUTH_PASSWORD.length < 12),
+    username: raw.BETA_AUTH_USERNAME,
+    password: raw.BETA_AUTH_PASSWORD,
+    role: raw.BETA_AUTH_ROLE,
+    sessionHours: raw.BETA_SESSION_HOURS,
+  },
   trustProxy: raw.TRUST_PROXY,
   receiptDateOrder: raw.RECEIPT_DATE_ORDER,
   veryfi: {
@@ -101,6 +120,7 @@ export const SECRET_VALUES = [
   raw.VERYFI_CLIENT_ID,
   raw.VERYFI_CLIENT_SECRET,
   raw.VERYFI_API_KEY,
+  raw.BETA_AUTH_PASSWORD,
 ].filter((value) => value && value.length >= 6);
 
 export function redactSecrets(text) {

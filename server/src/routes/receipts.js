@@ -26,7 +26,7 @@ function requireOcr(req, res, next) {
 // check and returns the job with the extracted expense.
 receiptsRouter.post("/upload", requireDatabase, requireOcr, receiptUpload, async (req, res) => {
   const receiptId = typeof req.body?.receiptId === "string" ? req.body.receiptId.slice(0, 100) : undefined;
-  const job = await createReceiptJob(req.receiptFile);
+  const job = await createReceiptJob(req.receiptFile, { uploadedBy: req.user?.id });
   await processReceiptJob(job, req.receiptFile);
   res.status(201).json(jobToResponse(job, { receiptId }));
 });
