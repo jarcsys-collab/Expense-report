@@ -1905,6 +1905,11 @@ summary {
 .field.low-confidence input {
   border-color: var(--theme-border, #7b6a39);
 }
+/* Identity from the signed-in account: shown, not editable. */
+.field input.identity-locked {
+  cursor: default;
+  border-style: dashed;
+}
 .back-link {
   color: var(--theme-muted, #a6b4b7);
   align-items: center;
@@ -2264,6 +2269,33 @@ summary {
   margin: 24px 0;
   font-size: 12px;
   display: flex;
+}
+.profile-identity {
+  grid-template-columns: max-content 1fr;
+  gap: 8px 18px;
+  margin: 15px 0 20px;
+  font-size: 12px;
+  display: grid;
+}
+.profile-identity dt {
+  color: var(--theme-muted, #96aaab);
+}
+.profile-identity dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.profile-identity .not-provided,
+.field input.not-provided::placeholder {
+  color: var(--theme-muted, #96aaab);
+  font-style: italic;
+}
+.microsoft-sign-in {
+  margin-bottom: 4px;
+}
+.beta-sign-in {
+  border-top: 1px solid var(--theme-border, #3a4141);
+  margin: 18px 0 12px;
+  padding-top: 12px;
 }
 .collapsed .sidebar {
   width: 80px;

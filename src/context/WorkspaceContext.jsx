@@ -7,6 +7,7 @@ import {
   logout as endSession,
   setActiveUser,
 } from "../services/authService";
+import { takeRedirectError } from "../services/entraAuth";
 import { createId } from "../utils/format";
 
 export const WorkspaceContext = createContext(null);
@@ -92,6 +93,12 @@ export function WorkspaceProvider({ children }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+  useEffect(() => {
+    const message = takeRedirectError();
+    if (message) {
+      notify(message, true);
+    }
+  }, [notify]);
   useEffect(() => {
     const updateOnline = () => setOnline(navigator.onLine);
     window.addEventListener("online", updateOnline);

@@ -11,7 +11,9 @@ export const API_BASE_URL = config.apiBase;
 export const AUTH_ENDPOINTS = {
   session: config.sessionPath,
   logout: config.logoutPath,
-  // TEMPORARY controlled-beta sign-in until Microsoft Entra ID.
+  // Microsoft Entra ID sign-in: exchanges verified Microsoft tokens for a session.
+  entra: "/auth/entra",
+  // TEMPORARY controlled-beta sign-in (fallback while Entra is verified).
   login: "/auth/login",
 };
 

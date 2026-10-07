@@ -29,7 +29,7 @@ export function createApp() {
       origin: (origin, callback) => callback(null, !origin || env.allowedOrigins.includes(origin)),
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-      allowedHeaders: ["Content-Type"],
+      allowedHeaders: ["Content-Type", "Authorization"],
       maxAge: 600,
     }),
   );

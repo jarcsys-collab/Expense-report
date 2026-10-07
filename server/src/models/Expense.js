@@ -102,6 +102,20 @@ const possibleDuplicateSchema = new Schema(
   embedded,
 );
 
+// Who owns the expense, taken from the server session when it is created
+// (never from the browser). provider "entra" means a verified Microsoft account.
+const employeeSchema = new Schema(
+  {
+    provider: { type: String, enum: ["entra", "beta", "dev"] },
+    entraUserId: text(100),
+    displayName: text(200),
+    email: text(320),
+    department: text(200),
+    jobTitle: text(200),
+  },
+  embedded,
+);
+
 const expenseSchema = new Schema(
   {
     requestNumber: { type: String, trim: true, maxlength: 50 },
@@ -137,6 +151,7 @@ const expenseSchema = new Schema(
     position: text(200),
     department: text(200),
     assignedApproverId: text(100),
+    employee: { type: employeeSchema },
 
     receiptId: text(100),
     receiptFiles: { type: [receiptFileSchema], default: [] },
@@ -173,5 +188,6 @@ const expenseSchema = new Schema(
 
 expenseSchema.index({ createdAt: -1 });
 expenseSchema.index({ employeeId: 1, createdAt: -1 });
+expenseSchema.index({ "employee.entraUserId": 1, createdAt: -1 }, { partialFilterExpression: { "employee.entraUserId": { $type: "string" } } });
 
 export const Expense = mongoose.model("Expense", expenseSchema);

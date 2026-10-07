@@ -16,6 +16,39 @@ expensesRouter.use(requireDatabase);
 
 const activity = (actor, action) => ({ id: randomUUID(), actor: actor || "Team member", action, createdAt: new Date() });
 
+// Expense ownership comes from the server session, never from the browser.
+// Verified Microsoft accounts own their name, email, department and job title;
+// the temporary beta account still types department and position itself.
+function employeeFromSession(user, fields) {
+  const verified = user.provider === "entra";
+  const department = verified ? user.department : fields.department || "";
+  const jobTitle = verified ? user.jobTitle : fields.position || "";
+  return {
+    employeeId: user.id,
+    employeeName: user.name,
+    department,
+    position: jobTitle,
+    employee: {
+      provider: user.provider,
+      entraUserId: verified ? user.id : "",
+      displayName: user.name,
+      email: user.email || "",
+      department,
+      jobTitle,
+    },
+  };
+}
+
+// Identity fields the browser may not change on an existing expense.
+function withoutIdentity(expense, fields) {
+  const { employee, employeeId, employeeName, ...rest } = fields;
+  if (expense.employee?.provider === "entra") {
+    delete rest.department;
+    delete rest.position;
+  }
+  return expense.employee ? rest : fields;
+}
+
 async function findExpense(id) {
   const expense = await Expense.findById(id);
   if (!expense) throw new HttpError(404, "EXPENSE_NOT_FOUND", "Expense not found.");
@@ -82,11 +115,12 @@ expensesRouter.post("/", validate({ body: expenseCreateSchema }), async (req, re
   const job = await findReceiptJob(fields.receiptJobId);
   const expense = new Expense({
     ...fields,
+    ...employeeFromSession(req.user, fields),
     receiptJobId: job?._id,
     status: CLIENT_CREATE_STATUSES.includes(status) ? status : "Draft",
   });
   expense.requestNumber = `RF-${expense._id.toHexString().slice(-6).toUpperCase()}`;
-  expense.activityLog.push(activity(fields.employeeName, job ? "Created expense from scanned receipt" : "Created expense"));
+  expense.activityLog.push(activity(req.user.name, job ? "Created expense from scanned receipt" : "Created expense"));
   applyDateReview(expense, job, dateReview);
   await applyAnomalyCheck(expense, job);
   await expense.save();
@@ -110,10 +144,10 @@ expensesRouter.patch("/:id", validateObjectId(), validate({ body: expenseUpdateS
   assertEditable(expense);
   const { status, dateReview, ...fields } = req.body;
   if (fields.receiptJobId === "") delete fields.receiptJobId;
-  expense.set(fields);
+  expense.set(withoutIdentity(expense, fields));
   const job = await findReceiptJob(expense.receiptJobId);
   applyDateReview(expense, job, dateReview);
-  expense.activityLog.push(activity(expense.employeeName, "Updated expense"));
+  expense.activityLog.push(activity(req.user.name, "Updated expense"));
   await applyAnomalyCheck(expense, job);
   await expense.save();
   res.json(expense);
@@ -132,7 +166,7 @@ expensesRouter.post("/:id/submit", validateObjectId(), validate({ body: submitSc
   if (req.body.expense) {
     const { status, dateReview, ...fields } = req.body.expense;
     if (fields.receiptJobId === "") delete fields.receiptJobId;
-    expense.set(fields);
+    expense.set(withoutIdentity(expense, fields));
     clientDateReview = dateReview;
   }
   const job = await findReceiptJob(expense.receiptJobId);
@@ -153,7 +187,7 @@ expensesRouter.post("/:id/submit", validateObjectId(), validate({ body: submitSc
   const pending = report.notEvaluated.length ? ` ${report.notEvaluated.length} check(s) could not run yet.` : "";
   expense.activityLog.push(
     activity(
-      expense.employeeName,
+      req.user.name,
       toManager
         ? `Submitted. Anomaly check found items to review: routed to Manager Approval.${pending}`
         : `Submitted. No anomalies found in the checks that ran: manager review skipped, routed to Finance.${pending}`,

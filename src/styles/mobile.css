@@ -501,6 +501,17 @@
     font-size: 13px;
     line-height: 1.45;
   }
+
+  /* ---------- Sign-in ---------- */
+  .microsoft-sign-in {
+    width: 100%;
+    min-height: 48px;
+  }
+  .beta-sign-in summary {
+    align-items: center;
+    min-height: 44px;
+    display: flex;
+  }
 }
 
 /* Smallest phones (around 320px). */

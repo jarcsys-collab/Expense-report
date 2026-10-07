@@ -52,21 +52,39 @@ export function ReviewPage() {
         .catch((error) => setLoadError(error.message));
     }
   }, [id]);
+  // New expenses take the employee from the signed-in account. A verified
+  // Microsoft identity (name, email, department, job title) always wins and is
+  // read-only; the server sets the same values from its session when saving.
+  const verifiedUser = user.provider === "entra";
   useEffect(() => {
     if (id === "new" && user.id) {
       setExpense((current) =>
-        current && !current.employeeId
+        current && (!current.employeeId || current.employeeId === user.id)
           ? {
               ...current,
               employeeId: user.id,
               employeeName: user.name,
-              department: current.department || user.department,
-              position: current.position || user.position || "",
+              employeeEmail: user.email || "",
+              identityVerified: verifiedUser,
+              department: verifiedUser
+                ? user.department
+                : current.department || user.department,
+              position: verifiedUser
+                ? user.position
+                : current.position || user.position || "",
             }
           : current,
       );
     }
-  }, [id, user.id, user.name, user.department, user.position]);
+  }, [
+    id,
+    user.id,
+    user.name,
+    user.email,
+    user.department,
+    user.position,
+    verifiedUser,
+  ]);
   if (loadError) {
     return (
       <ErrorState message={loadError} retry={() => window.location.reload()} />
@@ -150,7 +168,13 @@ export function ReviewPage() {
       expenseDate: date,
       dateReview: { ...current.dateReview, confirmedDate: date },
     }));
-  const renderField = (labelText, field, type = "text", required = false) => {
+  const renderField = (
+    labelText,
+    field,
+    type = "text",
+    required = false,
+    { readOnly = false, emptyText = "" } = {},
+  ) => {
     return (
       <label
         key={field}
@@ -186,7 +210,14 @@ export function ReviewPage() {
           id={`expense-${field}`}
           type={type}
           disabled={saving}
-          required={required}
+          readOnly={readOnly || undefined}
+          className={
+            readOnly
+              ? `identity-locked${expense[field] ? "" : " not-provided"}`
+              : undefined
+          }
+          placeholder={readOnly && !expense[field] ? emptyText : undefined}
+          required={required && !readOnly}
           step={type === "number" ? ".01" : undefined}
           min={type === "number" ? "0" : undefined}
           value={String(expense[field] ?? "")}
@@ -464,9 +495,34 @@ export function ReviewPage() {
               </div>
             )}
             <div className="form-grid">
-              {renderField("Employee name", "employeeName", "text", true)}
-              {renderField("Position / role", "position", "text", true)}
-              {renderField("Department", "department", "text", true)}
+              {renderField("Employee name", "employeeName", "text", true, {
+                readOnly: Boolean(user.id),
+              })}
+              {expense.identityVerified &&
+                renderField("Email", "employeeEmail", "email", false, {
+                  readOnly: true,
+                  emptyText: "Not provided in Microsoft profile",
+                })}
+              {renderField(
+                expense.identityVerified ? "Job title" : "Position / role",
+                "position",
+                "text",
+                !expense.identityVerified,
+                {
+                  readOnly: expense.identityVerified,
+                  emptyText: "Not provided in Microsoft profile",
+                },
+              )}
+              {renderField(
+                "Department",
+                "department",
+                "text",
+                !expense.identityVerified,
+                {
+                  readOnly: expense.identityVerified,
+                  emptyText: "Not provided in Microsoft profile",
+                },
+              )}
               {renderField("Total amount", "amount", "number", true)}
               {renderField("Merchant", "merchant", "text", true)}
               {renderField("Receipt date", "expenseDate", "date", true)}

@@ -344,6 +344,9 @@ export function normalizeExpense(response, options = {}) {
     employeeName: String(fields.employeeName || options.user?.name || ""),
     department: String(fields.department || options.user?.department || ""),
     position: String(fields.position || options.user?.position || ""),
+    // Owner identity set by the server from the signed-in account. A verified
+    // Microsoft identity cannot be edited in the form.
+    ...ownerIdentity(source, fallback, fields, options.user),
     receiptFiles,
     lineItems: Array.isArray(rawLineItems)
       ? rawLineItems.map(normalizeLineItem)
@@ -537,6 +540,20 @@ export function normalizeCategoryList(response) {
     throw new Error("Invalid server response: expected a category list.");
   }
   return list.map(normalizeCategory);
+}
+function ownerIdentity(source, fallback, fields, user) {
+  const owner = asObject(source.employee);
+  const isNewForUser = !fields.employeeId && !owner.provider;
+  return {
+    employeeEmail: toText(
+      owner.email,
+      fallback.employeeEmail || (isNewForUser ? user?.email || "" : ""),
+    ),
+    identityVerified:
+      owner.provider === "entra" ||
+      (!owner.provider && Boolean(fallback.identityVerified)) ||
+      (isNewForUser && user?.provider === "entra"),
+  };
 }
 export function toExpensePayload(expense) {
   return {

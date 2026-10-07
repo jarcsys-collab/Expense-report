@@ -23,8 +23,14 @@ export function validateExpense(expense, categories) {
   );
   return [
     !expense.employeeName.trim() && "Employee name is required.",
-    !expense.position.trim() && "Position / role is required.",
-    !expense.department.trim() && "Department is required.",
+    // A verified Microsoft identity is read-only: an empty department or job
+    // title in the Microsoft profile cannot be typed in by the employee.
+    !expense.identityVerified &&
+      !expense.position.trim() &&
+      "Position / role is required.",
+    !expense.identityVerified &&
+      !expense.department.trim() &&
+      "Department is required.",
     !expense.location.trim() && "Location is required.",
     !expense.merchant.trim() && "Merchant is required.",
     (!/^\d{4}-\d{2}-\d{2}$/.test(expense.expenseDate) ||

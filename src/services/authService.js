@@ -1,10 +1,20 @@
-// Session handling for GET /auth/session and POST /auth/logout.
-// The backend owns authentication (HttpOnly session cookie); the frontend
-// only asks who the current user is.
+// Session handling: GET /auth/session, POST /auth/entra, POST /auth/logout.
+// The backend owns authentication (server-side session). The frontend asks who
+// the current user is and, for Microsoft sign-in, hands the backend the
+// Microsoft tokens to verify. Identity comes from the backend, never from here.
+//
+// Primary sign-in: Microsoft Entra ID (services/entraAuth.js).
+// TEMPORARY fallback: beta sign-in (betaLogin below), to be removed after Entra
+// is verified.
 import { AUTH_ENDPOINTS } from "../config/api";
 import { config } from "../config/appConfig";
 import { asObject } from "../utils/values";
-import { ApiError, apiRequest } from "./httpClient";
+import {
+  clearMicrosoftState,
+  getMicrosoftTokens,
+  hasMicrosoftAccount,
+} from "./entraAuth";
+import { ApiError, apiRequest, setSessionToken } from "./httpClient";
 import { unwrapResponse } from "./normalizers";
 
 // Shown before sign-in or when no backend is connected.
@@ -62,7 +72,21 @@ async function fetchSession() {
   if (!config.apiBase) {
     return;
   }
-  const payload = unwrapResponse(await apiRequest(AUTH_ENDPOINTS.session));
+  let payload;
+  try {
+    payload = unwrapResponse(await apiRequest(AUTH_ENDPOINTS.session));
+  } catch (error) {
+    // No ReceiptFlow session (or the cookie is blocked): if this tab is signed
+    // in to Microsoft, get a new session from it without any prompt.
+    if (error instanceof ApiError && error.status === 401 && hasMicrosoftAccount()) {
+      return exchangeMicrosoftSession();
+    }
+    throw error;
+  }
+  return acceptUser(payload);
+}
+
+function acceptUser(payload) {
   const account = asObject(payload.user ?? payload);
   if (
     typeof account.id != "string" ||
@@ -75,15 +99,48 @@ async function fetchSession() {
       "Your account could not be verified. Contact your administrator.",
     );
   }
+  const text = (value) => (typeof value == "string" ? value : "");
   currentUser = {
     id: account.id,
     name: account.name,
     role: account.role,
-    email: typeof account.email == "string" ? account.email : "",
-    department: typeof account.department == "string" ? account.department : "",
-    position: typeof account.position == "string" ? account.position : "",
+    // "entra" (verified Microsoft account), "beta" or "dev".
+    provider: text(account.provider),
+    email: text(account.email),
+    department: text(account.department),
+    position: text(account.position || account.jobTitle),
   };
   return currentUser;
+}
+
+// POST /auth/entra: the backend verifies the Microsoft ID token, reads the
+// profile from Microsoft Graph itself and returns a ReceiptFlow session.
+// Returns undefined (signed out) when Microsoft needs the user to sign in again.
+async function exchangeMicrosoftSession() {
+  let tokens = await getMicrosoftTokens();
+  if (!tokens) return;
+  let payload;
+  try {
+    payload = await apiRequest(AUTH_ENDPOINTS.entra, "POST", tokens);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 401) throw error;
+    // Retry once with freshly issued tokens (e.g. an ID token that just expired).
+    tokens = await getMicrosoftTokens({ forceRefresh: true });
+    if (!tokens) return;
+    try {
+      payload = await apiRequest(AUTH_ENDPOINTS.entra, "POST", tokens);
+    } catch (retryError) {
+      if (retryError instanceof ApiError && retryError.status === 401) {
+        await clearMicrosoftState();
+        throw new Error(
+          "Your Microsoft account could not be verified for ReceiptFlow. Contact your administrator.",
+        );
+      }
+      throw retryError;
+    }
+  }
+  setSessionToken(payload?.sessionToken);
+  return acceptUser(payload);
 }
 
 // Sends the browser to the organization sign-in page when one is configured.
@@ -99,7 +156,11 @@ export function signIn() {
 // in the browser.
 export async function betaLogin(username, password) {
   try {
-    await apiRequest(AUTH_ENDPOINTS.login, "POST", { username, password });
+    const payload = await apiRequest(AUTH_ENDPOINTS.login, "POST", {
+      username,
+      password,
+    });
+    setSessionToken(payload?.sessionToken);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       throw new Error("Incorrect username or password.");
@@ -108,9 +169,15 @@ export async function betaLogin(username, password) {
   }
 }
 
-// POST /auth/logout
+// POST /auth/logout, then clears the in-memory session token and this tab's
+// Microsoft (MSAL) tokens.
 export async function logout() {
   await requireSession();
-  await apiRequest(AUTH_ENDPOINTS.logout, "POST", {});
-  currentUser = undefined;
+  try {
+    await apiRequest(AUTH_ENDPOINTS.logout, "POST", {});
+  } finally {
+    setSessionToken("");
+    currentUser = undefined;
+    await clearMicrosoftState();
+  }
 }

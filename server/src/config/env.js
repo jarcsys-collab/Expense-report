@@ -39,6 +39,14 @@ const schema = z.object({
   BETA_AUTH_PASSWORD: z.string().default(""),
   BETA_AUTH_ROLE: z.enum(["EMPLOYEE", "APPROVER", "FINANCE_ADMIN"]).default("EMPLOYEE"),
   BETA_SESSION_HOURS: z.coerce.number().int().min(1).max(72).default(12),
+  // Microsoft Entra ID sign-in (primary). Public identifiers, not secrets: the
+  // tenant (Directory) ID and the SPA's Application (client) ID. No client secret.
+  ENTRA_TENANT_ID: z.union([z.literal(""), z.guid()]).default(""),
+  ENTRA_CLIENT_ID: z.union([z.literal(""), z.guid()]).default(""),
+  ENTRA_SESSION_HOURS: z.coerce.number().int().min(1).max(24).default(8),
+  // Test-only endpoint overrides (signing keys and Microsoft Graph). Ignored in production.
+  ENTRA_TEST_JWKS_URI: z.string().trim().default(""),
+  ENTRA_TEST_GRAPH_BASE_URL: z.string().trim().default(""),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   // Veryfi OCR (backend only). All four credentials are required to enable OCR.
   VERYFI_CLIENT_ID: z.string().trim().default(""),
@@ -97,6 +105,18 @@ export const env = {
     password: raw.BETA_AUTH_PASSWORD,
     role: raw.BETA_AUTH_ROLE,
     sessionHours: raw.BETA_SESSION_HOURS,
+  },
+  entra: {
+    enabled: Boolean(raw.ENTRA_TENANT_ID && raw.ENTRA_CLIENT_ID),
+    tenantId: raw.ENTRA_TENANT_ID,
+    clientId: raw.ENTRA_CLIENT_ID,
+    // v2.0 ID tokens for a single-tenant app carry exactly this issuer.
+    issuer: `https://login.microsoftonline.com/${raw.ENTRA_TENANT_ID}/v2.0`,
+    jwksUri:
+      (!isProduction && raw.ENTRA_TEST_JWKS_URI) ||
+      `https://login.microsoftonline.com/${raw.ENTRA_TENANT_ID}/discovery/v2.0/keys`,
+    graphBaseUrl: ((!isProduction && raw.ENTRA_TEST_GRAPH_BASE_URL) || "https://graph.microsoft.com").replace(/\/$/, ""),
+    sessionHours: raw.ENTRA_SESSION_HOURS,
   },
   trustProxy: raw.TRUST_PROXY,
   receiptDateOrder: raw.RECEIPT_DATE_ORDER,

@@ -7,6 +7,14 @@ export class ApiError extends Error {
     this.name = "APIError";
   }
 }
+// ReceiptFlow session token, held in memory only (never in storage). Sent as a
+// bearer token so the session also works where the browser blocks the
+// cross-site session cookie (Safari on iPhone). Lost on reload; the session is
+// then restored from the cookie or by signing in to Microsoft silently again.
+let sessionToken = "";
+export function setSessionToken(token) {
+  sessionToken = typeof token === "string" ? token : "";
+}
 export function isAbortError(error) {
   return error instanceof Error && error.name === "AbortError";
 }
@@ -56,12 +64,14 @@ export async function apiRequest(path, method = "GET", body, options = {}) {
       method,
       credentials: config.credentials,
       signal: controller.signal,
-      headers:
-        body === undefined || body instanceof FormData
-          ? undefined
-          : {
-              "Content-Type": "application/json",
-            },
+      headers: {
+        ...(body === undefined || body instanceof FormData
+          ? {}
+          : { "Content-Type": "application/json" }),
+        ...(sessionToken && config.apiBase && url.href.startsWith(`${config.apiBase}/`)
+          ? { Authorization: `Bearer ${sessionToken}` }
+          : {}),
+      },
       body:
         body === undefined
           ? undefined

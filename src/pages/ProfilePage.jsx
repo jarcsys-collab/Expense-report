@@ -1,14 +1,20 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { config } from "../config/appConfig";
+import { entraConfig } from "../config/authConfig";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { betaLogin, signIn } from "../services/authService";
+import { signInWithMicrosoft } from "../services/entraAuth";
+
+const NOT_PROVIDED = "Not provided in Microsoft profile";
 
 export function ProfilePage() {
   const { user, authenticated, logout, run, busy, error, refresh } =
     useWorkspace();
-  // TEMPORARY controlled-beta sign-in (until Microsoft Entra ID). The password
-  // stays in memory only and is cleared after every attempt.
+  const microsoftSignIn = Boolean(config.apiBase) && entraConfig.enabled;
+  // TEMPORARY controlled-beta sign-in, kept as a fallback while Microsoft
+  // sign-in is verified. The password stays in memory only and is cleared
+  // after every attempt.
   const betaSignIn = Boolean(config.apiBase) && !config.signInUrl;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -22,6 +28,37 @@ export function ProfilePage() {
     }, "Signed in");
     if (signedIn) await refresh();
   };
+  const betaForm = (
+    <form onSubmit={submitBetaLogin} aria-label="Beta sign-in">
+      <label className="field">
+        Username
+        <input
+          name="username"
+          autoComplete="username"
+          required
+          value={username}
+          disabled={busy}
+          onChange={(event) => setUsername(event.target.value)}
+        />
+      </label>
+      <label className="field">
+        Password
+        <input
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+          value={password}
+          disabled={busy}
+          onChange={(event) => setPassword(event.target.value)}
+        />
+      </label>
+      <button className="button primary" disabled={busy}>
+        Sign In
+      </button>
+    </form>
+  );
+  const verified = authenticated && user.provider === "entra";
   return (
     <>
       <header className="page-header">
@@ -34,13 +71,34 @@ export function ProfilePage() {
       <section className="panel profile-panel">
         <h3>{user.name}</h3>
         {user.email && <p>{user.email}</p>}
-        <p>
-          {authenticated
-            ? [user.department, user.role.replaceAll("_", " ").toLowerCase()]
-                .filter(Boolean)
-                .join(" · ")
-            : "Account verification requires your organization’s sign-in service."}
-        </p>
+        {verified ? (
+          <dl className="profile-identity">
+            <dt>Department</dt>
+            <dd className={user.department ? "" : "not-provided"}>
+              {user.department || NOT_PROVIDED}
+            </dd>
+            <dt>Job title</dt>
+            <dd className={user.position ? "" : "not-provided"}>
+              {user.position || NOT_PROVIDED}
+            </dd>
+            <dt>Role</dt>
+            <dd>{user.role.replaceAll("_", " ").toLowerCase()}</dd>
+            <dt>Signed in with</dt>
+            <dd>Microsoft</dd>
+          </dl>
+        ) : (
+          <p>
+            {authenticated
+              ? [
+                  user.department,
+                  user.role.replaceAll("_", " ").toLowerCase(),
+                  user.provider === "beta" && "temporary beta account",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "Account verification requires your organization’s sign-in service."}
+          </p>
+        )}
         {error && <p role="alert">{error}</p>}
         {authenticated ? (
           <button
@@ -50,35 +108,24 @@ export function ProfilePage() {
           >
             Sign out
           </button>
-        ) : betaSignIn ? (
-          <form onSubmit={submitBetaLogin} aria-label="Beta sign-in">
-            <label className="field">
-              Username
-              <input
-                name="username"
-                autoComplete="username"
-                required
-                value={username}
-                disabled={busy}
-                onChange={(event) => setUsername(event.target.value)}
-              />
-            </label>
-            <label className="field">
-              Password
-              <input
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                disabled={busy}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
-            <button className="button primary" disabled={busy}>
-              Sign In
+        ) : microsoftSignIn ? (
+          <>
+            <button
+              className="button primary microsoft-sign-in"
+              disabled={busy}
+              onClick={() => void run(() => signInWithMicrosoft("/upload"))}
+            >
+              Sign in with Microsoft
             </button>
-          </form>
+            {betaSignIn && (
+              <details className="beta-sign-in">
+                <summary>Use temporary beta sign-in</summary>
+                {betaForm}
+              </details>
+            )}
+          </>
+        ) : betaSignIn ? (
+          betaForm
         ) : (
           <button
             className="button"
