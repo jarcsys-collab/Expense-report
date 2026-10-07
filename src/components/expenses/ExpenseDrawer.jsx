@@ -19,6 +19,7 @@ import { Modal } from "../common/Modal";
 import { Spinner } from "../common/Spinner";
 import { StatusBadge } from "../common/StatusBadge";
 import { TableSkeleton } from "../common/TableSkeleton";
+import { hasStoredFile } from "../receipts/ReceiptAssociation";
 import { ReceiptPreviewModal } from "../receipts/ReceiptPreviewModal";
 import { CommentThread } from "./CommentThread";
 import { ExpenseCheck } from "./ExpenseCheck";
@@ -157,7 +158,7 @@ export function ExpenseDrawer({ base: basePath = "/requests" }) {
                         ))}
                       </dl>
                     </details>
-                    <StatusBadge status={expense.status} />
+                    <StatusBadge status={expense.status} incomplete={expense.incompleteDraft} />
                   </div>
                   <ExpenseCheck
                     expense={expense}
@@ -277,22 +278,33 @@ export function ExpenseDrawer({ base: basePath = "/requests" }) {
                           {"Uploaded by "}
                           {expense.employeeName}
                         </small>
+                        {!hasStoredFile(file) && (
+                          <small>
+                            {expense.receiptJobId
+                              ? "Linked to receipt scan · original file not stored"
+                              : "Original file not stored"}
+                          </small>
+                        )}
                         <div className="file-actions">
-                          <button
-                            className="text-button"
-                            onClick={() => setPreviewFile(file)}
-                          >
-                            Preview
-                          </button>
-                          <button
-                            className="text-button"
-                            onClick={() =>
-                              void run(() => downloadReceipt(file))
-                            }
-                          >
-                            <Download size={14} />
-                            Download
-                          </button>
+                          {hasStoredFile(file) && (
+                            <>
+                              <button
+                                className="text-button"
+                                onClick={() => setPreviewFile(file)}
+                              >
+                                Preview
+                              </button>
+                              <button
+                                className="text-button"
+                                onClick={() =>
+                                  void run(() => downloadReceipt(file))
+                                }
+                              >
+                                <Download size={14} />
+                                Download
+                              </button>
+                            </>
+                          )}
                           {user.role === "FINANCE_ADMIN" && (
                             <button
                               className="text-button danger-text"

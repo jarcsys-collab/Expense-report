@@ -31,7 +31,7 @@ export function ReceiptUploader() {
   useEffect(() => {
     if (location.state?.scan) {
       setScanOptionsOpen(true);
-      navigate("/upload", {
+      navigate(location.pathname, {
         replace: true,
         state: null,
       });

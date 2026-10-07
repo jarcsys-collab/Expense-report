@@ -5,6 +5,7 @@ import { config } from "../config/appConfig";
 import { requireSession } from "./authService";
 import * as categories from "./categoryService";
 import * as expenses from "./expenseService";
+import * as policy from "./policyService";
 import * as receipts from "./receiptService";
 import * as violations from "./violationService";
 
@@ -23,6 +24,8 @@ const methods = {
   deleteFile: expenses.deleteFile,
   getCategories: categories.getCategories,
   saveCategory: categories.saveCategory,
+  getPolicy: policy.getPolicy,
+  checkPolicy: policy.checkPolicy,
   getViolations: violations.getViolations,
   uploadReceipt: receipts.uploadReceipt,
   getOCRStatus: receipts.getOcrStatus,

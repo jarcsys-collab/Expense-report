@@ -35,8 +35,8 @@ For local development without signing in, set `DEV_AUTH_ENABLED=true` in `server
 | GET, POST | `/api/expenses` | list (`?status&category&employeeId&limit`), create |
 | GET, PATCH, DELETE | `/api/expenses/:id` | edit/delete only while Draft, Needs Review, Needs Correction or Rejected |
 | GET, POST | `/api/categories` | |
-| PUT | `/api/categories/:id` | id or the frontend's new-category UUID |
-| POST | `/api/expenses/:id/submit` | runs the anomaly check; anomaly → Pending Approval (manager), none → Submitted (Finance) |
+| PUT | `/api/categories/:id` | id or the frontend's new-category UUID; FINANCE_ADMIN only (POST too). Employees only GET active categories |
+| POST | `/api/expenses/:id/submit` | checks required details (`SUBMISSION_INCOMPLETE`: date, category, amount, purpose, location, receipt; position/department unless from Microsoft), then runs the anomaly check; anomaly → Pending Approval (manager), none → Submitted (Finance) |
 | POST | `/api/receipts/upload` | multipart field `receipt`; Veryfi OCR → normalized expense + anomaly report |
 | GET | `/api/receipts/:jobId/status` | OCR job polling |
 | GET | `/api/violations` | expenses with findings (Expense Issues page) |
@@ -57,6 +57,20 @@ and enables receipt upload. Production/Pages builds do not read it.
 `Anomalies_reference.pdf` (each rule quotes its PDF anomaly and solution). Rules whose data source
 is not connected yet (attendance/leave, hotel and budget policy knowledge base, approval evidence)
 return `not_evaluated` with a `requiredSource`, and the report lists them in `notEvaluated`.
+
+**Company expense policy:** `server/src/policy/expensePolicy.js` is the only place with the role
+groups, per-expense limits, monthly limits and the representation rule; `policyService.js` applies
+it on the server. The employee's group comes from their verified Microsoft job title (normalized for
+case, periods, spacing and the policy's abbreviations; anything else is `POLICY_ROLE_UNMAPPED` and
+goes to manager review). A finance admin links each category to a policy key on the Categories
+page. Results are anomalies, never rejections: `POLICY_LIMIT_EXCEEDED` (amount > limit),
+`MONTHLY_POLICY_LIMIT_EXCEEDED` (same employee, same policy category, same calendar month by receipt
+date; counts Submitted, Pending Approval, Approved and Reimbursed, never drafts, Needs Review,
+Rejected or Needs Correction, and never the expense itself twice), `EXCOM_APPROVAL_REQUIRED` /
+`EXCOM_APPROVAL_EVIDENCE_MISSING` (Representation of PHP 5,000.00 and above). Any of them routes the
+expense to manager approval. ExCom evidence is recorded as details only (type, description, file
+name/type/size): the file is not stored and its content is not verified.
+`POST /api/policy/check` previews the server's result on the review screen.
 
 **Receipt dates:** a printed date such as `10/03/2026` can be read as day/month or month/day.
 The backend re-reads the printed date from the OCR text, keeps it as `dateReview.raw` (and
@@ -98,6 +112,16 @@ accounts; an empty department or job title shows "Not provided in Microsoft prof
 
 Sign-out deletes the ReceiptFlow session and clears MSAL's tokens from the browser.
 
+**Category policies** are managed only by `FINANCE_ADMIN` (`POST`/`PUT /api/categories` return 403
+for everyone else). A category has a name, optional description, optional spending limit (empty =
+not set: the limit check reports "not evaluated"), currency and an active flag. Inactive
+categories are hidden from employees and rejected on submission; expenses keep their stored
+category name and policy key (`categoryId` and `policyKey` are recorded when an expense is saved), so
+renaming, remapping or deactivating a category never changes history. Each category must be mapped
+to a company policy key, or deliberately set to "No company policy limit applies". To make someone a
+finance admin, let them sign in once, then set `role: "FINANCE_ADMIN"` on their document in the
+`users` collection (matched by `entraUserId` or `email`); it applies at their next sign-in.
+
 **Temporary fallback: beta sign-in** (`BETA_AUTH_*`, one shared account, `provider: "beta"`,
 id `beta-user`, never stored as a user). It is a collapsed "Use temporary beta sign-in" option
 on the Profile page. Signing in with either method replaces any existing session, so the two
@@ -108,6 +132,27 @@ identities never mix. To remove it after Entra is verified: delete the beta bloc
 
 Local Microsoft sign-in needs `http://localhost:5173/` added as a Single-page application redirect
 URI on the app registration and the IDs filled in `.env.development` (empty by default).
+
+## New expense: Reimbursement Assistant
+
+**New Expense** (`#/upload`) is a guided conversation over the existing endpoints: receipt scan →
+extracted details → date confirmation → missing details → server checks → summary → submit →
+status. Messages are fixed templates filled with the employee's answers and the server's results;
+there is no AI service. Several receipts at once, or a long receipt, use the scanner at
+`#/upload/batch`; **Review full details** opens the existing review form.
+
+**Incomplete drafts.** The full anomaly check (company policy, duplicates, receipt clarity,
+required details) runs only on a saved expense (`POST`/`PATCH /api/expenses`), so the assistant
+saves a draft before it shows the results. That draft is marked `incompleteDraft: true` until the
+employee saves it (Save as Draft, or saving from the review form) or submits it. Incomplete drafts:
+
+- show as "Draft · Incomplete" in My Requests, where the employee can finish or delete them;
+- are never matched as an earlier expense by the duplicate check;
+- are left out of Expense Issues;
+- are not counted in monthly policy totals (no draft is: only Submitted, Pending Approval,
+  Approved and Reimbursed count).
+
+Abandoned incomplete drafts are not deleted automatically.
 
 ## Current limitations
 

@@ -1,9 +1,8 @@
 import { createContext, useEffect, useRef, useState } from "react";
-import { config } from "../config/appConfig";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { api } from "../services/api";
 import { isAbortError } from "../services/httpClient";
-import { waitForOcr } from "../services/receiptService";
+import { scanReceipt } from "../services/receiptService";
 import { createId, nowIso, sanitizeFileName } from "../utils/format";
 import { validateReceiptFile } from "../utils/receiptFile";
 
@@ -54,17 +53,6 @@ export function UploadQueueProvider({ children }) {
     }
     const controller = new AbortController();
     controllers.current.set(item.id, controller);
-    const options = {
-      signal: controller.signal,
-      receiptId: item.id,
-      files: item.previews,
-      onProgress: (message, progress) =>
-        updateItem(item.id, {
-          status: "Processing",
-          message,
-          progress,
-        }),
-    };
     try {
       updateItem(item.id, {
         status: item.jobId ? "Processing" : "Uploading",
@@ -74,24 +62,18 @@ export function UploadQueueProvider({ children }) {
         progress: 0,
         error: undefined,
       });
-      const initial = item.jobId
-        ? await api.getOCRStatus(item.jobId, options)
-        : await api.uploadReceipt(item.files, options);
-      if (controller.signal.aborted) {
-        return;
-      }
-      updateItem(item.id, {
-        jobId: initial.jobId || undefined,
-      });
-      const result = await waitForOcr(initial, {
+      const result = await scanReceipt({
+        upload: api.uploadReceipt,
+        poll: api.getOCRStatus,
+        files: item.files,
+        jobId: item.jobId,
         signal: controller.signal,
-        interval: config.pollInterval,
-        poll: (jobId, signal) =>
-          api.getOCRStatus(jobId, {
-            ...options,
-            signal,
-          }),
-        onStatus: (status) =>
+        receiptId: item.id,
+        previews: item.previews,
+        onJob: (jobId) => updateItem(item.id, { jobId }),
+        onStage: (stage, status) =>
+          stage === "processing" &&
+          status &&
           updateItem(item.id, {
             status: "Processing",
             message: status.message || "Reading receipt…",
@@ -102,15 +84,6 @@ export function UploadQueueProvider({ children }) {
         return;
       }
       const expense = result.expense;
-      expense.originalOCR ??
-        (expense.originalOCR = {
-          merchant: expense.merchant,
-          amount: expense.amount,
-          expenseDate: expense.expenseDate,
-          receiptNumber: expense.receiptNumber,
-          subtotal: expense.subtotal,
-          tax: expense.tax,
-        });
       updateItem(item.id, {
         status: result.status === "ready" ? "Ready" : "Needs Review",
         message: "Receipt ready for review",

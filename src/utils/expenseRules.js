@@ -18,8 +18,9 @@ export function findDuplicate(expense, expenses) {
   );
 }
 export function validateExpense(expense, categories) {
+  // Only active categories can be chosen for a submission.
   const category = categories.find(
-    (category) => category.name === expense.category,
+    (category) => category.name === expense.category && category.active,
   );
   return [
     !expense.employeeName.trim() && "Employee name is required.",
@@ -46,11 +47,11 @@ export function validateExpense(expense, categories) {
       "Total must be greater than zero.",
     !expense.currency && "Currency is required.",
     !category && "Choose a valid category.",
-    category?.purposeRequired &&
-      !expense.purpose.trim() &&
-      "Business purpose is required.",
-    category?.receiptRequired &&
-      !expense.receiptFiles.length &&
+    // Purpose and a receipt are required for every submission (the server
+    // enforces the same rules).
+    !expense.purpose.trim() && "Business purpose is required.",
+    !expense.receiptFiles.length &&
+      !expense.receiptJobId &&
       "A receipt is required.",
     expense.lineItems.some(
       (lineItem) =>
@@ -74,9 +75,12 @@ export function validateCategory(category, categories) {
         category2.name.trim().toLowerCase() ===
           category.name.trim().toLowerCase(),
     ) && "A category with this name already exists.",
-    (!Number.isFinite(category.limit) || category.limit < 0) &&
-      "Enter a valid limit of zero or more.",
+    category.limit !== null &&
+      (!Number.isFinite(category.limit) || category.limit < 0) &&
+      "Enter a valid limit of zero or more, or leave it empty.",
     !/^[A-Z]{3}$/.test(category.currency) && "Choose a valid currency.",
+    category.policyKey === undefined &&
+      "Choose a company policy, or “No company policy limit applies”.",
   ].filter(Boolean);
 }
 export function runPolicyChecks(expense, expenses, categories) {
@@ -151,6 +155,7 @@ export function runPolicyChecks(expense, expenses, categories) {
       message: `Amount exceeds the ${category?.name} policy limit.`,
       passed:
         !category ||
+        category.limit === null ||
         category.currency !== expense.currency ||
         expense.amount <= category.limit,
     },

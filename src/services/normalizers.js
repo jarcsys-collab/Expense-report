@@ -344,6 +344,8 @@ export function normalizeExpense(response, options = {}) {
     employeeName: String(fields.employeeName || options.user?.name || ""),
     department: String(fields.department || options.user?.department || ""),
     position: String(fields.position || options.user?.position || ""),
+    // Proof of ExCom approval for large representations (details only).
+    excomEvidence: normalizeExcomEvidence(source.excomEvidence ?? fallback.excomEvidence),
     // Owner identity set by the server from the signed-in account. A verified
     // Microsoft identity cannot be edited in the form.
     ...ownerIdentity(source, fallback, fields, options.user),
@@ -431,6 +433,10 @@ export function normalizeExpense(response, options = {}) {
   if (receiptJobId) expense.receiptJobId = receiptJobId;
   const anomalyReport = asObject(source.anomalyReport);
   if (Object.keys(anomalyReport).length) expense.anomalyReport = anomalyReport;
+  // A draft the Reimbursement Assistant saved only to run checks (not yet saved by the employee).
+  // Only the server's answer decides it (never an earlier copy of the expense).
+  if (source.incompleteDraft === true) expense.incompleteDraft = true;
+  else delete expense.incompleteDraft;
   // Printed receipt date, its possible readings and the employee's confirmation.
   const dateReview = asObject(source.dateReview);
   if (Object.keys(dateReview).length) expense.dateReview = dateReview;
@@ -526,10 +532,18 @@ export function normalizeCategory(category) {
   return {
     id: toText(source.id),
     name: toText(source.name),
-    limit: toNumber(source.limit),
+    description: toText(source.description),
+    // null: Finance has not set a spending limit for this category.
+    limit:
+      source.limit === null || source.limit === undefined || source.limit === ""
+        ? null
+        : toNumber(source.limit),
     currency: toText(source.currency, config.defaultCurrency),
     receiptRequired: source.receiptRequired !== false,
     purposeRequired: source.purposeRequired !== false,
+    active: source.active !== false,
+    // Company expense policy this category follows (null: none).
+    policyKey: toText(source.policyKey) || null,
   };
 }
 export function normalizeCategoryList(response) {
@@ -540,6 +554,19 @@ export function normalizeCategoryList(response) {
     throw new Error("Invalid server response: expected a category list.");
   }
   return list.map(normalizeCategory);
+}
+function normalizeExcomEvidence(value) {
+  const evidence = asObject(value);
+  if (!toText(evidence.type)) {
+    return null;
+  }
+  return {
+    type: toText(evidence.type),
+    reference: toText(evidence.reference),
+    fileName: toText(evidence.fileName),
+    mimeType: toText(evidence.mimeType),
+    size: toNumber(evidence.size),
+  };
 }
 function ownerIdentity(source, fallback, fields, user) {
   const owner = asObject(source.employee);
@@ -556,13 +583,16 @@ function ownerIdentity(source, fallback, fields, user) {
   };
 }
 export function toExpensePayload(expense) {
+  // Only the assistant marks a save as an incomplete draft (expenseService
+  // options); every other save is the employee's own and clears the mark.
+  const { incompleteDraft, ...rest } = expense;
   return {
-    ...expense,
-    receiptFiles: expense.receiptFiles?.map((file) => ({
+    ...rest,
+    receiptFiles: rest.receiptFiles?.map((file) => ({
       ...file,
       url: /^(blob:|data:)/.test(file.url) ? undefined : file.url,
       thumbnailUrl: undefined,
     })),
-    clientRequestId: expense.id,
+    clientRequestId: rest.id,
   };
 }

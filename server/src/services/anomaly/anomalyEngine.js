@@ -6,6 +6,7 @@
 // Checks that could not run are listed in `notEvaluated`; an expense is never
 // reported as fully clean while any of them remain.
 import { Category } from "../../models/Category.js";
+import { evaluateExpensePolicy } from "../../policy/policyService.js";
 import { anomalyRules, SOURCE_DOCUMENT } from "./anomalyRules.js";
 import { findPossibleDuplicates } from "./duplicateCheck.js";
 
@@ -23,9 +24,11 @@ export const VIOLATION_PREFIX = "anomaly-";
  * @param {string} [input.excludeId]  the expense's own id (for duplicate checks)
  */
 export async function runAnomalyCheck({ expense, stage, ocr = null, receiptUploaded = false, excludeId }) {
-  const [categories, duplicates] = await Promise.all([
+  const [categories, duplicates, policy] = await Promise.all([
     Category.find().lean().catch(() => []),
     findPossibleDuplicates(expense, { excludeId }),
+    // Company expense policy (policy/expensePolicy.js), used by the policy rules.
+    evaluateExpensePolicy({ expense, stage, excludeId }),
   ]);
   const context = {
     expense,
@@ -34,6 +37,7 @@ export async function runAnomalyCheck({ expense, stage, ocr = null, receiptUploa
     receiptUploaded,
     categories,
     duplicates,
+    policy,
     today: new Date().toISOString().slice(0, 10),
   };
 
@@ -53,7 +57,7 @@ export async function runAnomalyCheck({ expense, stage, ocr = null, receiptUploa
       message: outcome.message,
       dependency: rule.dependency,
       requiredSource: outcome.status === "not_evaluated" ? rule.requiredSource ?? "unknown" : null,
-      source: SOURCE_DOCUMENT,
+      source: rule.source ?? SOURCE_DOCUMENT,
       reference: rule.pdf,
       ...(outcome.details ? { details: outcome.details } : {}),
     };

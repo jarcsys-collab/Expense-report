@@ -14,6 +14,7 @@
 import { describeIsoDate } from "../receiptDate.js";
 
 export const SOURCE_DOCUMENT = "Anomalies_reference.pdf";
+export const COMPANY_POLICY = "Company expense policy";
 
 export const DEPENDENCIES = {
   OCR_RECEIPT: "ocr_receipt",
@@ -22,6 +23,7 @@ export const DEPENDENCIES = {
   PREVIOUS: "previous_submissions",
   APPROVAL: "approval_evidence",
   CLARIFICATION: "manual_clarification",
+  COMPANY_POLICY: "company_expense_policy",
 };
 
 // "System captures expense and validates details" (PDF): the required details.
@@ -45,6 +47,8 @@ const filled = (v) => (typeof v === "number" ? Number.isFinite(v) && v > 0 : typ
 
 const result = (status, message, details) => ({ status, message, ...(details ? { details } : {}) });
 const notConnected = (what) => result("not_evaluated", `${what} is not connected yet, so this check could not run.`);
+// A company policy evaluation (policy/policyService.js) as a rule outcome.
+const fromPolicy = ({ status, message, finding }) => result(status, message, finding);
 
 export const anomalyRules = [
   {
@@ -54,10 +58,15 @@ export const anomalyRules = [
       anomaly: "Hotel exceeded allowable limit due to room availability issue",
       solution: "Knowledge base checks policy limit",
     },
-    dependency: DEPENDENCIES.POLICY,
-    requiredSource: "policy_knowledge_base",
+    dependency: DEPENDENCIES.COMPANY_POLICY,
+    requiredSource: "confirmed_category",
     severity: "warning",
-    evaluate: () => notConnected("The hotel allowance policy (knowledge base)"),
+    // Hotel & Lodging limits by policy group, from the company expense policy.
+    evaluate: ({ policy }) => {
+      if (policy.policyKey === "HOTEL_LODGING") return fromPolicy(policy.limit);
+      if (policy.limit.status === "not_evaluated" && !policy.policyKey) return fromPolicy(policy.limit);
+      return result("passed", "Not a Hotel & Lodging expense.");
+    },
   },
   {
     id: "missing_receipt",
@@ -100,6 +109,9 @@ export const anomalyRules = [
       if (!filled(expense.amount)) return result("not_evaluated", "No amount to compare against a limit yet.");
       if (!category) {
         return result("not_evaluated", "No ReceiptFlow category policy matches this expense, and approved budgets (knowledge base) are not connected.");
+      }
+      if (category.limit === null || category.limit === undefined) {
+        return result("not_evaluated", `No spending limit is set for ${category.name} yet, and approved budgets (knowledge base) are not connected.`);
       }
       if (category.currency !== expense.currency) {
         return result("not_evaluated", `The ${category.name} limit is in ${category.currency}; this ${expense.currency || "expense"} amount cannot be compared without a currency conversion.`);
@@ -186,6 +198,39 @@ export const anomalyRules = [
     requiredSource: "approval_evidence",
     severity: "warning",
     evaluate: () => notConnected("Approval-authority policy and approval evidence"),
+  },
+  {
+    id: "company_policy_limit",
+    name: "Company policy limit",
+    source: COMPANY_POLICY,
+    pdf: {
+      anomaly: "Expense amount exceeded approved budget or policy limit",
+      solution: "knowledge base checks policy limit",
+    },
+    dependency: DEPENDENCIES.COMPANY_POLICY,
+    requiredSource: "confirmed_category",
+    severity: "warning",
+    // Meal limits per expense and the monthly Product Presentations / Training &
+    // Evaluation / Gifts limit, by the employee's policy group. Hotel & Lodging
+    // is reported by the hotel rule above.
+    evaluate: ({ policy }) =>
+      policy.policyKey === "HOTEL_LODGING"
+        ? result("passed", "Checked under Hotel exceeded allowable limit.")
+        : fromPolicy(policy.limit),
+  },
+  {
+    id: "excom_approval_required",
+    name: "ExCom approval",
+    source: COMPANY_POLICY,
+    pdf: {
+      anomaly: "Expense requires higher-level approval due to exception or policy breach",
+      solution: "Ai chatbot requests for approval proof",
+    },
+    dependency: DEPENDENCIES.APPROVAL,
+    requiredSource: "confirmed_category",
+    severity: "warning",
+    // Representations of PHP 5,000.00 and above need proof of ExCom approval.
+    evaluate: ({ policy }) => fromPolicy(policy.excom),
   },
   {
     id: "unclear_or_inconsistent_details",

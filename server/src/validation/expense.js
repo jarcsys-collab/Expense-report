@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { objectId } from "../middleware/validate.js";
 import { EXPENSE_STATUSES, VIOLATION_SEVERITIES, VIOLATION_STATUSES } from "../models/constants.js";
+import { EXCOM_EVIDENCE_TYPES } from "../policy/expensePolicy.js";
 
 // Accepts the payload the frontend sends (src/services/normalizers.js toExpensePayload).
 // Unknown keys (client ids, comments, activity log, ...) are stripped: the server owns them.
@@ -92,7 +93,20 @@ const fields = {
   originalOCR: z.record(z.string().max(50), z.union([z.string().max(1000), z.number()])),
   policyViolations: z.array(violation).max(50),
   duplicateOverrideReason: text(1000),
+  // Set by the Reimbursement Assistant when it saves a draft only to run the checks.
+  incompleteDraft: z.boolean(),
   transactionMatch: transactionMatch,
+  // Proof of ExCom approval (representations of PHP 5,000 and above): details only.
+  excomEvidence: z.union([
+    z.null(),
+    z.object({
+      type: z.enum(EXCOM_EVIDENCE_TYPES),
+      reference: text(500).default(""),
+      fileName: text(255).default(""),
+      mimeType: text(100).default(""),
+      size: z.number().int().min(0).max(1e10).default(0),
+    }),
+  ]),
 };
 
 // Also accept the generic names date/total/employee/confidence/violations.

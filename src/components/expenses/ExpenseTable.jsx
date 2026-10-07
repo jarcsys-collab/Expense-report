@@ -570,7 +570,7 @@ export function ExpenseTable({
                           </button>
                         </div>
                       ) : (
-                        <StatusBadge status={expense.status} />
+                        <StatusBadge status={expense.status} incomplete={expense.incompleteDraft} />
                       )}
                     </td>
                     <td>
@@ -629,7 +629,7 @@ export function ExpenseTable({
                 </div>
                 <FindingBadge expense={expense} />
                 <div className="expense-card-bottom">
-                  <StatusBadge status={expense.status} />
+                  <StatusBadge status={expense.status} incomplete={expense.incompleteDraft} />
                   <span>
                     <FileText size={13} />
                     {expense.receiptFiles.length

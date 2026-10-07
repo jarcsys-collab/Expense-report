@@ -20,6 +20,20 @@ export function ReceiptViewer({ file }) {
     setRotation(0);
   }, [file.id]);
   const isPdf = file.mimeType === "application/pdf";
+  // Saved expenses keep only the file details (the original is not stored).
+  if (!/^(https?:|blob:|data:)/.test(file.url || "")) {
+    return (
+      <div className="receipt-view">
+        <div className="receipt-canvas receipt-not-stored">
+          <p>
+            Original receipt not stored. ReceiptFlow keeps the file details and
+            the scanned data only.
+          </p>
+        </div>
+        <small className="muted">{file.name}</small>
+      </div>
+    );
+  }
   return (
     <div className="receipt-view">
       <div className="preview-toolbar">

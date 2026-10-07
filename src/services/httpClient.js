@@ -1,9 +1,13 @@
 import { config } from "../config/appConfig";
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, details, code) {
     super(message);
     this.status = status;
+    // The server's error code, e.g. "SUBMISSION_INCOMPLETE" (when it sent one).
+    this.code = typeof code === "string" ? code : "";
+    // Field-level problems from the server: [{ path, message }].
+    this.details = Array.isArray(details) ? details : [];
     this.name = "APIError";
   }
 }
@@ -81,10 +85,14 @@ export async function apiRequest(path, method = "GET", body, options = {}) {
     });
     if (!response.ok) {
       let errorMessage = "";
+      let errorDetails;
+      let errorCode;
       try {
         const json = await response.json();
         const serverMessage = json?.message || json?.error;
         errorMessage = typeof serverMessage == "string" ? serverMessage : "";
+        errorDetails = json?.details;
+        errorCode = json?.error;
       } catch {}
       throw new ApiError(
         response.status === 401
@@ -92,6 +100,8 @@ export async function apiRequest(path, method = "GET", body, options = {}) {
           : errorMessage ||
               `Request failed (${response.status}). Please retry.`,
         response.status,
+        errorDetails,
+        errorCode,
       );
     }
     if (response.status === 204) {

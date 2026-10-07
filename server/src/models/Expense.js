@@ -4,6 +4,7 @@ import {
   VIOLATION_SEVERITIES,
   VIOLATION_STATUSES,
 } from "./constants.js";
+import { EXCOM_EVIDENCE_TYPES, POLICY_CATEGORY_KEYS } from "../policy/expensePolicy.js";
 import { toJSONOptions } from "./toJSON.js";
 
 // Field names follow the frontend's expense shape (src/services/normalizers.js):
@@ -116,6 +117,21 @@ const employeeSchema = new Schema(
   embedded,
 );
 
+// What the employee provides as proof of ExCom approval for representations of
+// PHP 5,000 and above. Only these details are kept: ReceiptFlow does not store
+// the file itself yet and does not verify its content.
+const excomEvidenceSchema = new Schema(
+  {
+    type: { type: String, enum: EXCOM_EVIDENCE_TYPES },
+    reference: text(500),
+    fileName: text(255),
+    mimeType: text(100),
+    size: { type: Number, min: 0, default: 0 },
+    providedAt: Date,
+  },
+  embedded,
+);
+
 const expenseSchema = new Schema(
   {
     requestNumber: { type: String, trim: true, maxlength: 50 },
@@ -139,6 +155,11 @@ const expenseSchema = new Schema(
 
     // Business context
     category: text(100),
+    // Server-maintained link to the category as it was when the expense was
+    // saved: its id and company policy key. Kept as filed, so renaming,
+    // remapping or deactivating a category later does not change history.
+    categoryId: { type: Schema.Types.ObjectId, ref: "Category" },
+    policyKey: { type: String, enum: [...POLICY_CATEGORY_KEYS, null] },
     purpose: text(1000),
     location: text(200),
     notes: text(2000),
@@ -152,6 +173,7 @@ const expenseSchema = new Schema(
     department: text(200),
     assignedApproverId: text(100),
     employee: { type: employeeSchema },
+    excomEvidence: { type: excomEvidenceSchema },
 
     receiptId: text(100),
     receiptFiles: { type: [receiptFileSchema], default: [] },
@@ -175,6 +197,12 @@ const expenseSchema = new Schema(
     comments: { type: [commentSchema], default: [] },
     activityLog: { type: [activitySchema], default: [] },
     duplicateOverrideReason: text(1000),
+    // A draft the Reimbursement Assistant saved only so the server could run its
+    // checks; the employee has not saved or submitted it yet. Cleared when the
+    // employee saves it themselves or submits it. Incomplete drafts are not
+    // counted as earlier expenses by the duplicate check and are left out of
+    // Expense Issues. (Monthly policy totals never count drafts.)
+    incompleteDraft: { type: Boolean },
     transactionMatch: { type: transactionMatchSchema },
     submittedAt: Date,
     approvedAt: Date,

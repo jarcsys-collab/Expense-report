@@ -5,8 +5,10 @@ import { ErrorState } from "../components/common/ErrorState";
 import { Spinner } from "../components/common/Spinner";
 import { TableSkeleton } from "../components/common/TableSkeleton";
 import { ExpenseCheck } from "../components/expenses/ExpenseCheck";
+import { PolicyExceptions } from "../components/expenses/PolicyExceptions";
 import { ImageEditModal } from "../components/receipts/ImageEditModal";
 import { DateReviewNote } from "../components/receipts/DateReviewNote";
+import { ReceiptAssociation } from "../components/receipts/ReceiptAssociation";
 import { ReceiptViewer } from "../components/receipts/ReceiptViewer";
 import { config } from "../config/appConfig";
 import { useUploadQueue } from "../hooks/useUploadQueue";
@@ -286,7 +288,17 @@ export function ReviewPage() {
         setExpense(result);
         upsert(result);
         if (submit) {
-          result = await api.submitExpense(result.id, result);
+          try {
+            result = await api.submitExpense(result.id, result);
+          } catch (error) {
+            // The server checks required details too; show its findings on the form.
+            if (error?.details?.length) {
+              setValidationErrors(
+                error.details.map((detail) => String(detail.message)),
+              );
+            }
+            throw error;
+          }
           upsert(result);
         }
         return result;
@@ -494,17 +506,13 @@ export function ReviewPage() {
                 ))}
               </div>
             )}
+            <h4 className="form-group-title">Employee information</h4>
             <div className="form-grid">
               {renderField("Employee name", "employeeName", "text", true, {
                 readOnly: Boolean(user.id),
               })}
-              {expense.identityVerified &&
-                renderField("Email", "employeeEmail", "email", false, {
-                  readOnly: true,
-                  emptyText: "Not provided in Microsoft profile",
-                })}
               {renderField(
-                expense.identityVerified ? "Job title" : "Position / role",
+                "Position / role",
                 "position",
                 "text",
                 !expense.identityVerified,
@@ -523,9 +531,49 @@ export function ReviewPage() {
                   emptyText: "Not provided in Microsoft profile",
                 },
               )}
-              {renderField("Total amount", "amount", "number", true)}
-              {renderField("Merchant", "merchant", "text", true)}
+              {expense.identityVerified &&
+                renderField("Email", "employeeEmail", "email", false, {
+                  readOnly: true,
+                  emptyText: "Not provided in Microsoft profile",
+                })}
+            </div>
+            <h4 className="form-group-title">Expense information</h4>
+            <div className="form-grid">
               {renderField("Receipt date", "expenseDate", "date", true)}
+              <label className="field">
+                <span>
+                  Category *
+                  {expense.ocrConfidence.category !== undefined &&
+                    expense.ocrConfidence.category < config.confidence && (
+                      <small>● Needs review</small>
+                    )}
+                </span>
+                <select
+                  required
+                  id="expense-category"
+                  value={expense.category}
+                  disabled={saving}
+                  onChange={(event) => setField("category", event.target.value)}
+                >
+                  <option value="">Select category</option>
+                  {expense.category &&
+                    !categories.some(
+                      (category) =>
+                        category.active && category.name === expense.category,
+                    ) && (
+                      <option value={expense.category}>
+                        {expense.category}
+                        {" (check policy)"}
+                      </option>
+                    )}
+                  {categories
+                    .filter((category) => category.active)
+                    .map((category) => (
+                      <option key={category.id}>{category.name}</option>
+                    ))}
+                </select>
+              </label>
+              {renderField("Total amount", "amount", "number", true)}
               <label className="field">
                 <span>
                   Currency *
@@ -559,62 +607,26 @@ export function ReviewPage() {
                     ))}
                 </select>
               </label>
-              <label className="field">
-                <span>
-                  Category *
-                  {expense.ocrConfidence.category !== undefined &&
-                    expense.ocrConfidence.category < config.confidence && (
-                      <small>● Needs review</small>
-                    )}
-                </span>
-                <select
-                  required
-                  id="expense-category"
-                  value={expense.category}
-                  disabled={saving}
-                  onChange={(event) => setField("category", event.target.value)}
-                >
-                  <option value="">Select category</option>
-                  {expense.category &&
-                    !categories.some(
-                      (category) => category.name === expense.category,
-                    ) && (
-                      <option value={expense.category}>
-                        {expense.category}
-                        {" (check policy)"}
-                      </option>
-                    )}
-                  {categories.map((category) => (
-                    <option key={category.id}>{category.name}</option>
-                  ))}
-                </select>
-              </label>
-              {renderField(
-                "Business purpose",
-                "purpose",
-                "text",
-                !!categories.find(
-                  (category) => category.name === expense.category,
-                )?.purposeRequired,
-              )}
+              {renderField("Business purpose", "purpose", "text", true)}
               {renderField("Location", "location", "text", true)}
+              {renderField("Merchant", "merchant", "text", true)}
               <label className="field">
                 <span>Status · set by workflow</span>
                 <input value={expense.status} readOnly />
               </label>
-              <div className="field">
-                <span>Receipt *</span>
-                <span>
-                  {expense.receiptFiles.length
-                    ? expense.receiptFiles.map((file) => file.name).join(", ")
-                    : "Attach a receipt before submitting"}
-                </span>
-              </div>
               {renderField("Payment method", "paymentMethod")}
               {renderField("Receipt number", "receiptNumber")}
               {renderField("Subtotal", "subtotal", "number")}
               {renderField("Tax", "tax", "number")}
             </div>
+            <PolicyExceptions
+              expense={expense}
+              expenseId={savedId}
+              disabled={saving}
+              onEvidenceChange={(evidence) => setField("excomEvidence", evidence)}
+            />
+            <h4 className="form-group-title">Receipt</h4>
+            <ReceiptAssociation expense={expense} />
             <details className="additional-fields">
               <summary>Additional receipt & accounting details</summary>
               <div className="form-grid">

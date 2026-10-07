@@ -1,9 +1,9 @@
 import {
   ClipboardList,
+  MessageCirclePlus,
   Settings,
   ShieldCheck,
   Tags,
-  Upload,
 } from "lucide-react";
 
 // `short` labels and `phone` are for the phone bottom navigation (< 640px);
@@ -12,10 +12,10 @@ export function getNavItems(role, authenticated) {
   return [
     {
       to: "/upload",
-      label: "Scan Receipt",
-      short: "Scan",
+      label: "New Expense",
+      short: "New",
       phone: true,
-      icon: Upload,
+      icon: MessageCirclePlus,
     },
     {
       to: "/requests",

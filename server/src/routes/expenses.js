@@ -5,39 +5,19 @@ import { HttpError } from "../middleware/errorHandler.js";
 import { requireDatabase } from "../middleware/requireDatabase.js";
 import { validate, validateObjectId } from "../middleware/validate.js";
 import { CLIENT_CREATE_STATUSES, EDITABLE_STATUSES } from "../models/constants.js";
+import { Category } from "../models/Category.js";
 import { Expense } from "../models/Expense.js";
 import { ReceiptJob } from "../models/ReceiptJob.js";
 import { reportToViolations, runAnomalyCheck, VIOLATION_PREFIX } from "../services/anomaly/anomalyEngine.js";
+import { employeeFromSession } from "../services/employeeIdentity.js";
 import { applyDateConfirmation, describeIsoDate } from "../services/receiptDate.js";
 import { expenseCreateSchema, expenseListQuery, expenseUpdateSchema } from "../validation/expense.js";
+import { missingForSubmission } from "../validation/submission.js";
 
 export const expensesRouter = Router();
 expensesRouter.use(requireDatabase);
 
 const activity = (actor, action) => ({ id: randomUUID(), actor: actor || "Team member", action, createdAt: new Date() });
-
-// Expense ownership comes from the server session, never from the browser.
-// Verified Microsoft accounts own their name, email, department and job title;
-// the temporary beta account still types department and position itself.
-function employeeFromSession(user, fields) {
-  const verified = user.provider === "entra";
-  const department = verified ? user.department : fields.department || "";
-  const jobTitle = verified ? user.jobTitle : fields.position || "";
-  return {
-    employeeId: user.id,
-    employeeName: user.name,
-    department,
-    position: jobTitle,
-    employee: {
-      provider: user.provider,
-      entraUserId: verified ? user.id : "",
-      displayName: user.name,
-      email: user.email || "",
-      department,
-      jobTitle,
-    },
-  };
-}
 
 // Identity fields the browser may not change on an existing expense.
 function withoutIdentity(expense, fields) {
@@ -47,6 +27,27 @@ function withoutIdentity(expense, fields) {
     delete rest.position;
   }
   return expense.employee ? rest : fields;
+}
+
+// Records when the ExCom approval evidence details were provided (kept while unchanged).
+function withEvidenceTimestamp(expense, fields) {
+  if (!fields.excomEvidence) return fields;
+  const before = expense?.excomEvidence;
+  const same =
+    before &&
+    ["type", "reference", "fileName"].every((key) => (before[key] ?? "") === (fields.excomEvidence[key] ?? ""));
+  return { ...fields, excomEvidence: { ...fields.excomEvidence, providedAt: same ? before.providedAt : new Date() } };
+}
+
+// Records which category (id and company policy key) the expense was saved
+// under. Unknown names are left unlinked; submission validation rejects them.
+async function linkCategory(expense) {
+  const name = String(expense.category ?? "").trim();
+  const category = name
+    ? await Category.findOne({ name }, { policyKey: 1 }).collation({ locale: "en", strength: 2 }).lean()
+    : null;
+  expense.categoryId = category?._id;
+  expense.policyKey = category ? (category.policyKey ?? null) : undefined;
 }
 
 async function findExpense(id) {
@@ -66,6 +67,33 @@ async function findReceiptJob(receiptJobId) {
   const job = await ReceiptJob.findById(receiptJobId);
   if (!job) throw new HttpError(400, "RECEIPT_JOB_NOT_FOUND", "The linked receipt scan was not found.");
   return job;
+}
+
+// Linking a receipt scan to an expense: only the account that uploaded it may
+// link it. The file details recorded on the expense come from the scan itself.
+// The original image/PDF is not stored by ReceiptFlow (only these details and
+// the OCR job), so the file entry has no URL.
+function linkReceiptJob(expense, job, user) {
+  if (job.uploadedBy && job.uploadedBy !== user.id) {
+    throw new HttpError(403, "RECEIPT_JOB_FORBIDDEN", "This receipt scan was uploaded by another account.");
+  }
+  expense.receiptJobId = job._id;
+  const jobFileId = `job-${job._id.toHexString()}`;
+  if (!expense.receiptFiles.some((file) => file.id === jobFileId)) {
+    expense.receiptFiles = [
+      {
+        id: jobFileId,
+        name: job.originalFileName,
+        mimeType: job.mimeType,
+        size: job.size ?? 0,
+        url: "",
+        pageNumber: 1,
+        uploadedAt: job.createdAt,
+      },
+      // Browser-side copies of the same scan only carry a temporary preview link.
+      ...expense.receiptFiles.filter((file) => /^https?:\/\//.test(file.url ?? "")),
+    ];
+  }
 }
 
 // The date review (printed date, readings) always comes from the receipt scan;
@@ -88,6 +116,7 @@ function applyDateReview(expense, job, clientReview) {
 // Re-runs the anomaly check on the server's copy of the expense (the client's
 // findings are never trusted) and stores the report, findings and duplicates.
 async function applyAnomalyCheck(expense, job) {
+  await linkCategory(expense);
   const report = await runAnomalyCheck({
     expense: expense.toObject(),
     stage: "submission",
@@ -114,11 +143,13 @@ expensesRouter.post("/", validate({ body: expenseCreateSchema }), async (req, re
   const { status, dateReview, ...fields } = req.body;
   const job = await findReceiptJob(fields.receiptJobId);
   const expense = new Expense({
-    ...fields,
+    ...withEvidenceTimestamp(null, fields),
     ...employeeFromSession(req.user, fields),
-    receiptJobId: job?._id,
+    receiptJobId: undefined,
     status: CLIENT_CREATE_STATUSES.includes(status) ? status : "Draft",
   });
+  if (job) linkReceiptJob(expense, job, req.user);
+  expense.incompleteDraft = fields.incompleteDraft === true && expense.status === "Draft" ? true : undefined;
   expense.requestNumber = `RF-${expense._id.toHexString().slice(-6).toUpperCase()}`;
   expense.activityLog.push(activity(req.user.name, job ? "Created expense from scanned receipt" : "Created expense"));
   applyDateReview(expense, job, dateReview);
@@ -144,7 +175,12 @@ expensesRouter.patch("/:id", validateObjectId(), validate({ body: expenseUpdateS
   assertEditable(expense);
   const { status, dateReview, ...fields } = req.body;
   if (fields.receiptJobId === "") delete fields.receiptJobId;
-  expense.set(withoutIdentity(expense, fields));
+  const newJobId = fields.receiptJobId && fields.receiptJobId !== String(expense.receiptJobId ?? "") ? fields.receiptJobId : null;
+  delete fields.receiptJobId;
+  expense.set(withEvidenceTimestamp(expense, withoutIdentity(expense, fields)));
+  // Any save the assistant does not mark as a check is the employee saving it.
+  expense.incompleteDraft = fields.incompleteDraft === true && expense.status === "Draft" ? true : undefined;
+  if (newJobId) linkReceiptJob(expense, await findReceiptJob(newJobId), req.user);
   const job = await findReceiptJob(expense.receiptJobId);
   applyDateReview(expense, job, dateReview);
   expense.activityLog.push(activity(req.user.name, "Updated expense"));
@@ -166,8 +202,21 @@ expensesRouter.post("/:id/submit", validateObjectId(), validate({ body: submitSc
   if (req.body.expense) {
     const { status, dateReview, ...fields } = req.body.expense;
     if (fields.receiptJobId === "") delete fields.receiptJobId;
-    expense.set(withoutIdentity(expense, fields));
+    const newJobId = fields.receiptJobId && fields.receiptJobId !== String(expense.receiptJobId ?? "") ? fields.receiptJobId : null;
+    delete fields.receiptJobId;
+    expense.set(withEvidenceTimestamp(expense, withoutIdentity(expense, fields)));
+    if (newJobId) linkReceiptJob(expense, await findReceiptJob(newJobId), req.user);
     clientDateReview = dateReview;
+  }
+  // Required details are checked by the server before anything is submitted.
+  const missing = await missingForSubmission(expense);
+  if (missing.length) {
+    throw new HttpError(
+      400,
+      "SUBMISSION_INCOMPLETE",
+      `Complete the required details before submitting. ${missing.map((item) => item.message).join(" ")}`,
+      missing,
+    );
   }
   const job = await findReceiptJob(expense.receiptJobId);
   applyDateReview(expense, job, clientDateReview);
@@ -180,6 +229,7 @@ expensesRouter.post("/:id/submit", validateObjectId(), validate({ body: submitSc
       `Confirm the receipt date before submitting. The receipt shows "${raw}", which can be ${describeIsoDate(candidates.dayMonthYear)} or ${describeIsoDate(candidates.monthDayYear)}.`,
     );
   }
+  expense.incompleteDraft = undefined;
   const report = await applyAnomalyCheck(expense, job);
   const toManager = report.route === "manager_approval";
   expense.status = toManager ? "Pending Approval" : "Submitted";

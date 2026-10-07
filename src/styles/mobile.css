@@ -502,6 +502,11 @@
     line-height: 1.45;
   }
 
+  /* ---------- Company policy results ---------- */
+  .policy-exception dl {
+    grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
+  }
+
   /* ---------- Sign-in ---------- */
   .microsoft-sign-in {
     width: 100%;
@@ -528,5 +533,73 @@
   }
   .mobile-file-options button {
     font-size: 12px;
+  }
+}
+
+/* ---------- Reimbursement Assistant on phones ---------- */
+@media (max-width: 639px) {
+  .assistant-header .button {
+    display: none;
+  }
+  .chat-avatar {
+    width: 26px;
+    height: 26px;
+  }
+  .chat-bubble {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .chat-rows {
+    grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
+    gap: 6px 10px;
+  }
+  /* The reply area stays in reach above the bottom navigation. */
+  .assistant-composer {
+    bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+    margin-left: calc(-1 * var(--mobile-gutter));
+    margin-right: calc(-1 * var(--mobile-gutter));
+    padding: 10px var(--mobile-gutter) 12px;
+  }
+  .keyboard-open .assistant-composer {
+    bottom: var(--keyboard-inset, 0px);
+  }
+  .composer-actions .button {
+    flex: 1 1 100%;
+    min-height: 48px;
+    font-size: 15px;
+    white-space: normal;
+    text-align: center;
+  }
+  /* Secondary actions share rows so the reply area stays compact. */
+  .composer-actions .button:not(.primary) {
+    flex: 1 1 calc(50% - 5px);
+    font-size: 14px;
+  }
+  .composer-answer input,
+  .composer-answer select,
+  .composer-wait input,
+  .composer-section textarea {
+    font-size: 16px; /* no iOS zoom on focus */
+  }
+  .composer-answer {
+    flex-wrap: wrap;
+  }
+  .composer-answer input,
+  .composer-answer select {
+    flex-basis: 100%;
+  }
+  .composer-answer .button {
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+  .composer-edit .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Phones have no drag and drop: no drop hint. */
+@media (max-width: 639px) {
+  .composer-drop-hint {
+    display: none;
   }
 }

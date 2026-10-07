@@ -57,6 +57,9 @@ export const ENDPOINTS = {
     method: "POST",
   },
   categories: { rest: "/categories", n8n: "/webhook/categories" },
+  // Company expense policy (read-only) and the server's policy result for an expense.
+  policy: { rest: "/policy", n8n: "/webhook/policy" },
+  policyCheck: { rest: "/policy/check", n8n: "/webhook/policy-check", method: "POST" },
   saveCategory: {
     rest: "/categories/{id}",
     n8n: "/webhook/category-save",

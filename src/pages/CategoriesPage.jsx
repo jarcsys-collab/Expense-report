@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "../components/common/EmptyState";
 import { ErrorState } from "../components/common/ErrorState";
@@ -9,6 +9,9 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import { api } from "../services/api";
 import { validateCategory } from "../utils/expenseRules";
 import { createId, formatCurrency } from "../utils/format";
+
+// Select value for a deliberate "no company policy limit" (saved as null).
+const NO_POLICY = "none";
 
 export function CategoriesPage() {
   const {
@@ -24,9 +27,24 @@ export function CategoriesPage() {
   const [editing, setEditing] = useState();
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState([]);
+  // Company policy categories (labels only; limits are applied by the server).
+  const [policyCategories, setPolicyCategories] = useState({});
+  useEffect(() => {
+    if (user.role !== "FINANCE_ADMIN") return;
+    let active = true;
+    api.getPolicy().then(
+      (policy) => active && setPolicyCategories(policy?.categories ?? {}),
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [user.role]);
   const existing = categories.find((category) => category.id === editing?.id);
-  const nameLocked =
+  // Renaming is allowed: existing expenses keep the name they were filed under.
+  const renamingUsed =
     !!existing &&
+    existing.name.trim().toLowerCase() !== editing.name.trim().toLowerCase() &&
     expenses.some((expense) => expense.category === existing.name);
   return config.apiBase && user.role !== "FINANCE_ADMIN" ? (
     <EmptyState
@@ -54,10 +72,15 @@ export function CategoriesPage() {
             setEditing({
               id: createId(),
               name: "",
-              limit: 0,
+              description: "",
+              // No limit until Finance enters one.
+              limit: null,
               currency: config.defaultCurrency,
               receiptRequired: true,
               purposeRequired: true,
+              active: true,
+              // Not chosen yet: the admin must pick a policy or "no limit".
+              policyKey: undefined,
             });
           }}
         >
@@ -83,19 +106,33 @@ export function CategoriesPage() {
                 <SlidersHorizontal size={20} />
               </div>
               <h3>{category.name}</h3>
-              <p>Warn when this category exceeds</p>
-              <strong>
-                {formatCurrency(category.limit, category.currency)}
-              </strong>
-              <small>
-                {category.receiptRequired
-                  ? "Receipt required"
-                  : "Receipt optional"}
-                {" ·"}{" "}
-                {category.purposeRequired
-                  ? "Purpose required"
-                  : "Purpose optional"}
-              </small>
+              {category.description && <p>{category.description}</p>}
+              {/* The company policy decides the limits (by job title); the
+                  optional category limit is an extra warning on top. */}
+              {category.policyKey ? (
+                <>
+                  <p>Company policy</p>
+                  <strong>
+                    {policyCategories[category.policyKey]?.label ??
+                      category.policyKey}
+                  </strong>
+                  <small>Limits by job title from the company policy</small>
+                </>
+              ) : (
+                <strong>No company policy limit applies</strong>
+              )}
+              {category.limit !== null && (
+                <small>
+                  {"Additional category limit: "}
+                  {formatCurrency(category.limit, category.currency)}
+                </small>
+              )}
+              <small>Receipt and purpose required</small>
+              {!category.active && (
+                <small className="category-inactive">
+                  Inactive · employees cannot select it
+                </small>
+              )}
               <button
                 className="button"
                 onClick={() => {
@@ -151,6 +188,7 @@ export function CategoriesPage() {
                   api.saveCategory({
                     ...editing,
                     name: editing.name.trim(),
+                    policyKey: editing.policyKey ?? null,
                   }),
                 "Category saved",
               );
@@ -173,7 +211,7 @@ export function CategoriesPage() {
               <input
                 required
                 value={editing.name}
-                disabled={saving || nameLocked}
+                disabled={saving}
                 onChange={(event) =>
                   setEditing({
                     ...editing,
@@ -182,12 +220,26 @@ export function CategoriesPage() {
                 }
               />
             </label>
-            {nameLocked && (
+            {renamingUsed && (
               <p className="muted">
-                This name is used by existing expenses. You can update its
-                policy or add a new category.
+                Existing expenses keep the name “{existing.name}” they were
+                filed under.
               </p>
             )}
+            <label className="field">
+              Description (optional)
+              <input
+                value={editing.description}
+                maxLength={500}
+                disabled={saving}
+                onChange={(event) =>
+                  setEditing({
+                    ...editing,
+                    description: event.target.value,
+                  })
+                }
+              />
+            </label>
             {categories.some(
               (category) =>
                 category.id !== editing.id &&
@@ -199,22 +251,29 @@ export function CategoriesPage() {
               </p>
             )}
             <label className="field">
-              Maximum amount
+              Additional category limit (optional)
               <input
                 type="number"
                 step="0.01"
                 disabled={saving}
                 min="0"
-                required
-                value={editing.limit}
+                placeholder="No limit set"
+                value={editing.limit ?? ""}
                 onChange={(event) =>
                   setEditing({
                     ...editing,
-                    limit: Number(event.target.value),
+                    limit:
+                      event.target.value === ""
+                        ? null
+                        : Number(event.target.value),
                   })
                 }
               />
             </label>
+            <p className="muted">
+              Usually empty: the company policy already sets limits by job
+              title. Use only for an extra warning on this category.
+            </p>
             <label className="field">
               Currency
               <select
@@ -231,51 +290,82 @@ export function CategoriesPage() {
                 ))}
               </select>
             </label>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={editing.receiptRequired}
+            <label className="field">
+              Company policy
+              <select
+                id="category-policy-key"
+                required
+                value={
+                  editing.policyKey === undefined
+                    ? ""
+                    : (editing.policyKey ?? NO_POLICY)
+                }
+                disabled={saving}
                 onChange={(event) =>
                   setEditing({
                     ...editing,
-                    receiptRequired: event.target.checked,
+                    policyKey:
+                      event.target.value === ""
+                        ? undefined
+                        : event.target.value === NO_POLICY
+                          ? null
+                          : event.target.value,
                   })
                 }
-              />
-              Receipt required
+              >
+                <option value="">Choose a company policy</option>
+                <option value={NO_POLICY}>No company policy limit applies</option>
+                {Object.entries(policyCategories).map(([key, item]) => (
+                  <option key={key} value={key}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
             </label>
+            <p className="muted">
+              Policy limits by job title are applied by ReceiptFlow from the
+              company expense policy.
+            </p>
             <label className="checkbox-label">
               <input
                 type="checkbox"
-                checked={editing.purposeRequired}
+                checked={editing.active}
                 onChange={(event) =>
                   setEditing({
                     ...editing,
-                    purposeRequired: event.target.checked,
+                    active: event.target.checked,
                   })
                 }
               />
-              Business purpose required
+              Active (employees can select it)
             </label>
             <div className="rule-preview" aria-live="polite">
               <h3>Rule preview</h3>
               <p>
-                {"Warn when a "}
-                {editing.name.trim() || "category"}
-                {" expense exceeds"}{" "}
-                {Number.isFinite(editing.limit) && editing.limit >= 0
-                  ? formatCurrency(editing.limit, editing.currency)
-                  : "a valid limit"}{" "}
-                {"in "}
-                {editing.currency}.
+                {editing.policyKey
+                  ? `Company policy limits for ${policyCategories[editing.policyKey]?.label ?? editing.policyKey} apply, by job title.`
+                  : editing.policyKey === null
+                    ? "No company policy limit applies."
+                    : "Choose a company policy."}{" "}
+                {editing.limit === null ? null : (
+                  <>
+                    {"Warn when a "}
+                    {editing.name.trim() || "category"}
+                    {" expense exceeds"}{" "}
+                    {Number.isFinite(editing.limit) && editing.limit >= 0
+                      ? formatCurrency(editing.limit, editing.currency)
+                      : "a valid limit"}{" "}
+                    {"in "}
+                    {editing.currency}.
+                  </>
+                )}
               </p>
               <p>
-                {editing.receiptRequired
-                  ? "A receipt is required."
-                  : "Receipt attachment is optional."}{" "}
-                {editing.purposeRequired
-                  ? "A business purpose is required."
-                  : "Business purpose is optional."}
+                {/* ReceiptFlow requires both for every submission. */}
+                {"A receipt and a business purpose are required."}{" "}
+                {editing.active
+                  ? "Employees can select it."
+                  : "Inactive: employees cannot select it for new submissions."}
               </p>
               <small>
                 Limits apply to the matching currency. The service validates and

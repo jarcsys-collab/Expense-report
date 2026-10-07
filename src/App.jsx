@@ -4,6 +4,7 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { ThemeProvider } from "./context/ThemeContext";
 import { UploadQueueProvider } from "./context/UploadQueueContext";
 import { WorkspaceProvider } from "./context/WorkspaceContext";
+import { AssistantPage } from "./pages/AssistantPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { ExpensesPage } from "./pages/ExpensesPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -21,7 +22,10 @@ export function App() {
               <Routes>
                 <Route element={<AppLayout />}>
                   <Route index element={<Navigate to="/upload" replace />} />
-                  <Route path="upload" element={<ExpensesPage upload />} />
+                  {/* New expense: the Reimbursement Assistant. */}
+                  <Route path="upload" element={<AssistantPage />} />
+                  {/* Several receipts at once, or a long receipt in sections. */}
+                  <Route path="upload/batch" element={<ExpensesPage upload />} />
                   <Route path="requests" element={<ExpensesPage />} />
                   <Route path="requests/:id" element={<ExpensesPage />} />
                   <Route

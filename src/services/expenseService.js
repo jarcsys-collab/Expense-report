@@ -28,13 +28,20 @@ export async function getExpenses(filters = {}) {
 // GET /expenses/{id}
 export const getExpense = (id) => expenseAction("expense", { id });
 
+// options.incompleteDraft: the Reimbursement Assistant is saving the draft only
+// so the server can run its checks (see Expense.incompleteDraft on the server).
+const withOptions = (expense, options = {}) => ({
+  ...toExpensePayload(expense),
+  ...(options.incompleteDraft ? { incompleteDraft: true } : {}),
+});
+
 // POST /expenses
-export const createExpense = (expense) =>
-  expenseAction("create", {}, toExpensePayload(expense), expense);
+export const createExpense = (expense, options) =>
+  expenseAction("create", {}, withOptions(expense, options), expense);
 
 // PATCH /expenses/{id}
-export const updateExpense = (id, expense) =>
-  expenseAction("update", { id }, toExpensePayload(expense), expense);
+export const updateExpense = (id, expense, options) =>
+  expenseAction("update", { id }, withOptions(expense, options), expense);
 
 // DELETE /expenses/{id}
 export async function deleteExpense(id) {

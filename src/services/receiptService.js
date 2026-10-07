@@ -122,3 +122,32 @@ export async function waitForOcr(initialStatus, options) {
     options.signal.removeEventListener("abort", forwardAbort);
   }
 }
+
+// Upload (or resume) one receipt scan and wait for its OCR result: the same
+// ReceiptFlow → API → Veryfi process for the upload queue and the
+// Reimbursement Assistant. `onStage` reports what is really happening:
+// "uploading" while the file is sent, "processing" while the API reports the
+// OCR job as still running.
+export async function scanReceipt({ upload, poll, files, jobId, signal, receiptId, previews, onStage, onJob }) {
+  const options = { signal, receiptId, files: previews };
+  onStage?.(jobId ? "processing" : "uploading");
+  const initial = jobId ? await poll(jobId, options) : await upload(files, options);
+  if (signal.aborted) throw createAbortError();
+  onJob?.(initial.jobId || undefined);
+  const result = await waitForOcr(initial, {
+    signal,
+    interval: config.pollInterval,
+    poll: (id, pollSignal) => poll(id, { ...options, signal: pollSignal }),
+    onStatus: (status) => onStage?.("processing", status),
+  });
+  const expense = result.expense;
+  expense.originalOCR ??= {
+    merchant: expense.merchant,
+    amount: expense.amount,
+    expenseDate: expense.expenseDate,
+    receiptNumber: expense.receiptNumber,
+    subtotal: expense.subtotal,
+    tax: expense.tax,
+  };
+  return result;
+}

@@ -1,14 +1,24 @@
 import mongoose from "mongoose";
+import { POLICY_CATEGORY_KEYS } from "../policy/expensePolicy.js";
 import { toJSONOptions } from "./toJSON.js";
 
 const categorySchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 100 },
-    // Spending limit in `currency`; the frontend warns when an expense exceeds it.
-    limit: { type: Number, required: true, min: 0, default: 0 },
+    description: { type: String, trim: true, maxlength: 500, default: "" },
+    // Spending limit in `currency`; expenses above it are flagged. null means
+    // Finance has not set a limit, and the limit check reports "not evaluated"
+    // instead of comparing against an invented value.
+    limit: { type: Number, min: 0, default: null },
     currency: { type: String, required: true, match: /^[A-Z]{3}$/, default: "PHP" },
     receiptRequired: { type: Boolean, default: true },
     purposeRequired: { type: Boolean, default: true },
+    // Inactive categories stay for history (expenses keep the stored name) but
+    // cannot be chosen for new submissions.
+    active: { type: Boolean, default: true },
+    // Which company expense policy applies (policy/expensePolicy.js), chosen by
+    // a finance admin. null: no company policy limit for this category.
+    policyKey: { type: String, enum: [...POLICY_CATEGORY_KEYS, null], default: null },
     // The frontend creates categories with a client-generated UUID and saves
     // them with PUT /categories/:uuid. That id is kept here so repeated saves
     // update the same category instead of creating duplicates.

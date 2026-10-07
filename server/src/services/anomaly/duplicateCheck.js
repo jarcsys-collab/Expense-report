@@ -8,6 +8,7 @@ const caseInsensitive = { locale: "en", strength: 2 };
  * Previous expenses that look like the same claim:
  *   same merchant AND (same receipt/invoice number OR same date + amount + currency),
  *   or, without a merchant, same receipt number + amount.
+ * Incomplete assistant drafts (incompleteDraft) are never matched.
  * Returns [] when nothing matches, or null when the check could not run.
  */
 export async function findPossibleDuplicates(expense, { excludeId } = {}) {
@@ -29,6 +30,8 @@ export async function findPossibleDuplicates(expense, { excludeId } = {}) {
     return [];
   }
   if (excludeId) query._id = { $ne: excludeId };
+  // Drafts the assistant saved only to run its checks are not earlier claims.
+  query.incompleteDraft = { $ne: true };
 
   try {
     const matches = await Expense.find(query)
