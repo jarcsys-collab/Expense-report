@@ -20,7 +20,6 @@ export const STEPS = {
   REVIEW_SUMMARY: "REVIEW_SUMMARY",
   SUBMITTING: "SUBMITTING",
   SUBMITTED: "SUBMITTED",
-  DRAFT_SAVED: "DRAFT_SAVED",
   STATUS_TRACKING: "STATUS_TRACKING",
   ERROR: "ERROR",
 };
@@ -273,7 +272,13 @@ function askNext(state) {
   };
 }
 
+// Any step forward replaces the last Save Draft confirmation or error.
 export function reducer(state, action) {
+  const next = step(state, action);
+  return action.type.startsWith("DRAFT_") || !next.draftNote ? next : { ...next, draftNote: null };
+}
+
+function step(state, action) {
   switch (action.type) {
     case "RESET":
       return { ...initialState(), messages: [say("welcome", { again: true })] };
@@ -475,19 +480,21 @@ export function reducer(state, action) {
         messages: [...state.messages, say("submitted", { expense: action.expense })],
       };
 
+    // Save Draft: the employee's own save. The conversation stays where it is.
+    case "DRAFT_SAVING":
+      return { ...state, draftNote: { saving: true } };
+
     case "DRAFT_SAVED":
       return {
         ...state,
-        step: STEPS.DRAFT_SAVED,
-        result: action.expense,
-        messages: [
-          ...state.messages,
-          reply("Save as Draft"),
-          say("text", {
-            text: `Saved as a draft (${action.expense.requestNumber}). You can finish it later from My Requests.`,
-          }),
-        ],
+        savedId: action.expense.id,
+        userSaved: true,
+        expense: { ...state.expense, ...pickServerFields(action.expense) },
+        draftNote: { saved: true, requestNumber: action.expense.requestNumber },
       };
+
+    case "DRAFT_FAILED":
+      return { ...state, draftNote: { error: action.message, auth: action.auth } };
 
     case "TRACK":
       return {

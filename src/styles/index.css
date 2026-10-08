@@ -4932,3 +4932,30 @@ summary {
   white-space: normal;
   max-width: 100%;
 }
+.composer-answer-actions {
+  flex: 0 0 auto;
+  gap: 10px;
+  display: flex;
+}
+.composer-wait {
+  color: var(--theme-muted, #96aaab);
+  min-height: 44px;
+  font-size: 14px;
+}
+.composer-draft-note {
+  color: var(--theme-success-ink, #7fd49c);
+  align-items: flex-start;
+  gap: 7px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  display: flex;
+}
+.composer-draft-note svg {
+  margin-top: 3px;
+}
+.composer-draft-note.error {
+  color: var(--theme-danger-ink, #f98c88);
+}
+.composer-draft-note a {
+  text-decoration: underline;
+}

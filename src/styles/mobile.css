@@ -603,3 +603,17 @@
     display: none;
   }
 }
+
+/* Answer row on phones: field on its own line, Continue + Save Draft below. */
+@media (max-width: 639px) {
+  .composer-answer-actions {
+    flex: 1 1 100%;
+  }
+  .composer-answer .composer-answer-actions .button {
+    flex: 1 1 0;
+    min-height: 48px;
+  }
+  .composer-answer .composer-answer-actions .button.primary {
+    flex-grow: 1.4;
+  }
+}

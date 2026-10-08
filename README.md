@@ -122,6 +122,15 @@ to a company policy key, or deliberately set to "No company policy limit applies
 finance admin, let them sign in once, then set `role: "FINANCE_ADMIN"` on their document in the
 `users` collection (matched by `entraUserId` or `email`); it applies at their next sign-in.
 
+**Approved initial categories** (`server/src/policy/approvedCategories.js`) are created by the
+backend each time it connects to MongoDB, so employees can choose them without any setup: Hotel &
+Lodging, In-based meals, Out-based meals, Work with meals, Special operation meals, Product
+Presentations, Training & evaluation | Gifts for medical Assoc., and Representations, each mapped
+to its policy key. Only missing ones are added (matched by name, any letter case); an existing
+category with the same name is never changed, so Finance's later edits or deactivation stay. Limits
+are not copied into MongoDB; `expensePolicy.js` remains the only source. If a listed policy key is
+unknown to the policy engine, nothing is created and the error is logged.
+
 **Temporary fallback: beta sign-in** (`BETA_AUTH_*`, one shared account, `provider: "beta"`,
 id `beta-user`, never stored as a user). It is a collapsed "Use temporary beta sign-in" option
 on the Profile page. Signing in with either method replaces any existing session, so the two
@@ -144,7 +153,7 @@ there is no AI service. Several receipts at once, or a long receipt, use the sca
 **Incomplete drafts.** The full anomaly check (company policy, duplicates, receipt clarity,
 required details) runs only on a saved expense (`POST`/`PATCH /api/expenses`), so the assistant
 saves a draft before it shows the results. That draft is marked `incompleteDraft: true` until the
-employee saves it (Save as Draft, or saving from the review form) or submits it. Incomplete drafts:
+employee saves it (Save Draft, available at every step once the receipt is read, or saving from the review form) or submits it. Incomplete drafts:
 
 - show as "Draft · Incomplete" in My Requests, where the employee can finish or delete them;
 - are never matched as an earlier expense by the duplicate check;

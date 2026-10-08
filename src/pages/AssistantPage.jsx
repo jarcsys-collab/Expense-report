@@ -1,6 +1,6 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Camera, FileText, RefreshCw, Save, Send } from "lucide-react";
+import { Camera, CircleCheck, FileText, RefreshCw, Save, Send } from "lucide-react";
 import {
   BUSY_STEPS,
   findingKind,
@@ -93,16 +93,74 @@ export function AssistantPage() {
     [],
   );
 
-  // Show each new message from its start.
-  const messageCount = state.messages.length;
+  // ---------- keeping the current question in view ----------
+  // The newest message (usually the current question) is placed right above
+  // the reply area, so the question and its answer control are seen together.
+  // Someone reading earlier messages is only brought back down when a new
+  // step asks them for something.
+  const composerRef = useRef(null);
+  const readingEarlier = useRef(false);
+  // A scroll the assistant makes itself, so it is not mistaken for the employee's.
+  const autoScroll = useRef(false);
+  const pendingReveal = useRef(undefined);
   useEffect(() => {
-    if (messageCount > 1) {
-      lastMessage.current?.scrollIntoView({
-        block: "nearest",
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      });
+    const onScroll = () => {
+      const gap = document.documentElement.scrollHeight - (window.scrollY + window.innerHeight);
+      readingEarlier.current = gap > 240;
+      // The employee scrolled: drop any follow-up adjustment still waiting.
+      if (!autoScroll.current) clearTimeout(pendingReveal.current);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  function revealCurrent() {
+    const target = lastMessage.current;
+    const composer = composerRef.current;
+    if (!target || !composer) return;
+    const viewport = window.visualViewport;
+    const viewTop = (viewport?.offsetTop ?? 0) + 8;
+    let viewBottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+    // Phone bottom navigation (hidden while the keyboard is open).
+    const nav = document.querySelector(".mobile-rail");
+    const navBox = nav?.getBoundingClientRect();
+    if (navBox && navBox.height > 0 && navBox.width > navBox.height) {
+      viewBottom = Math.min(viewBottom, navBox.top);
     }
-  }, [messageCount]);
+    const sticky = getComputedStyle(composer).position === "sticky";
+    const limit = (sticky ? Math.min(composer.getBoundingClientRect().top, viewBottom) : viewBottom) - 12;
+    const box = target.getBoundingClientRect();
+    let delta = 0;
+    if (box.height > limit - viewTop || box.top < viewTop) delta = box.top - viewTop;
+    else if (box.bottom > limit) delta = box.bottom - limit;
+    if (Math.abs(delta) > 1) {
+      autoScroll.current = true;
+      window.scrollBy({ top: delta, behavior: "auto" });
+      // The scroll event fires before the next frames; ours ends after them.
+      requestAnimationFrame(() => requestAnimationFrame(() => (autoScroll.current = false)));
+    }
+  }
+  const messageCount = state.messages.length;
+  useLayoutEffect(() => {
+    if (messageCount < 2 || (readingEarlier.current && busy)) return undefined;
+    revealCurrent();
+    // Once more after late layout (images, fonts, the reply area's height),
+    // cancelled if the employee scrolls in the meantime.
+    pendingReveal.current = setTimeout(revealCurrent, 120);
+    return () => clearTimeout(pendingReveal.current);
+  }, [messageCount, state.step, state.draftNote]);
+  // Phone keyboard: when it opens over an answer field, keep the question above it.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const keepVisible = () => {
+      if (composerRef.current?.contains(document.activeElement)) setTimeout(revealCurrent, 60);
+    };
+    viewport?.addEventListener("resize", keepVisible);
+    document.addEventListener("focusin", keepVisible);
+    return () => {
+      viewport?.removeEventListener("resize", keepVisible);
+      document.removeEventListener("focusin", keepVisible);
+    };
+  }, []);
 
   // ---------- receipt scan (ReceiptFlow → API → Veryfi) ----------
   async function runScan() {
@@ -176,10 +234,11 @@ export function AssistantPage() {
     running.current = true;
     (async () => {
       try {
-        // Saved as an incomplete draft until the employee saves or submits it.
+        // Saved as an incomplete draft until the employee saves (Save Draft) or submits it.
+        const options = { incompleteDraft: !state.userSaved };
         const saved = state.savedId
-          ? await api.updateExpense(state.savedId, state.expense, { incompleteDraft: true })
-          : await api.createExpense(state.expense, { incompleteDraft: true });
+          ? await api.updateExpense(state.savedId, state.expense, options)
+          : await api.createExpense(state.expense, options);
         upsert(saved);
         dispatch({ type: "CHECKS_DONE", expense: saved });
       } catch (error) {
@@ -221,13 +280,19 @@ export function AssistantPage() {
     }
   }
 
+  // Save Draft: the existing draft save (POST, or PATCH once saved) as a
+  // normal draft. The conversation continues where it was.
   async function saveDraft() {
+    if (state.draftNote?.saving) return;
+    dispatch({ type: "DRAFT_SAVING" });
     try {
-      const saved = await api.updateExpense(state.savedId, state.expense);
+      const saved = state.savedId
+        ? await api.updateExpense(state.savedId, state.expense)
+        : await api.createExpense(state.expense);
       upsert(saved);
       dispatch({ type: "DRAFT_SAVED", expense: saved });
     } catch (error) {
-      dispatch({ type: "FAILED", kind: "save", message: error.message, ...errorKindOf(error) });
+      dispatch({ type: "DRAFT_FAILED", message: error.message, auth: error?.status === 401 });
     }
   }
 
@@ -246,7 +311,7 @@ export function AssistantPage() {
       return;
     }
     try {
-      upsert(await api.updateExpense(state.savedId, state.expense, { incompleteDraft: true }));
+      upsert(await api.updateExpense(state.savedId, state.expense, { incompleteDraft: !state.userSaved }));
       navigate(`/review/${state.savedId}`);
     } catch (error) {
       dispatch({ type: "FAILED", kind: "save", message: error.message, ...errorKindOf(error) });
@@ -360,6 +425,7 @@ export function AssistantPage() {
         </ol>
       </section>
       <Composer
+        composerRef={composerRef}
         state={state}
         busy={busy}
         user={user}
@@ -408,17 +474,62 @@ export function AssistantPage() {
 // ---------------------------------------------------------------------------
 
 function Composer(props) {
-  const { state, busy } = props;
+  const { state, busy, composerRef } = props;
   const content = composerContent(props);
   const large = [STEPS.REVIEW_EXTRACTED_DATA, STEPS.SHOW_POLICY_RESULTS].includes(state.step) && content.large;
   return (
     <section
+      ref={composerRef}
       className={`assistant-composer${large ? " is-form" : ""}`}
       aria-label="Your reply"
       aria-busy={busy || undefined}
     >
+      <DraftNote note={state.draftNote} />
       {content.node}
     </section>
+  );
+}
+
+// Steps where the expense has enough to be saved as a draft.
+const DRAFT_STEPS = [
+  STEPS.REVIEW_EXTRACTED_DATA,
+  STEPS.CONFIRM_DATE,
+  STEPS.COLLECT_MISSING_INFORMATION,
+  STEPS.SHOW_POLICY_RESULTS,
+  STEPS.REVIEW_SUMMARY,
+];
+
+function SaveDraftButton({ state, onSaveDraft }) {
+  if (!DRAFT_STEPS.includes(state.step) || !state.expense) return null;
+  const saving = Boolean(state.draftNote?.saving);
+  return (
+    <button type="button" className="button save-draft" disabled={saving} onClick={onSaveDraft}>
+      {saving ? <Spinner /> : <Save size={16} aria-hidden="true" />}
+      {saving ? "Saving…" : "Save Draft"}
+    </button>
+  );
+}
+
+function DraftNote({ note }) {
+  if (!note || note.saving) return null;
+  if (note.error) {
+    return (
+      <p className="composer-draft-note error" role="alert">
+        {note.auth ? (
+          <>
+            Draft not saved: your session has expired. <Link to="/profile">Sign in again</Link> to continue.
+          </>
+        ) : (
+          `Draft not saved: ${note.error}`
+        )}
+      </p>
+    );
+  }
+  return (
+    <p className="composer-draft-note" role="status">
+      <CircleCheck size={15} aria-hidden="true" />
+      <span>Draft saved ({note.requestNumber}). You can keep going, or finish it later from My Requests.</span>
+    </p>
   );
 }
 
@@ -433,10 +544,10 @@ function composerContent(props) {
     }[state.step];
     return {
       node: (
-        <div className="composer-wait" role="status">
+        <p className="composer-wait" role="status">
           <Spinner />
-          <input aria-label="Reply" disabled placeholder={text} />
-        </div>
+          {text}
+        </p>
       ),
     };
   }
@@ -456,6 +567,7 @@ function composerContent(props) {
                 <button className="button" onClick={() => dispatch({ type: "EDIT_MODE", editing: true })}>
                   Edit details
                 </button>
+                <SaveDraftButton {...props} />
                 <button className="text-button" onClick={props.onFullDetails}>
                   Review full details
                 </button>
@@ -471,7 +583,6 @@ function composerContent(props) {
     case STEPS.REVIEW_SUMMARY:
       return { node: <SummaryActions {...props} /> };
     case STEPS.SUBMITTED:
-    case STEPS.DRAFT_SAVED:
     case STEPS.STATUS_TRACKING:
       return {
         node: (
@@ -479,17 +590,15 @@ function composerContent(props) {
             <button className="button primary" onClick={() => props.onViewRequest(state.result.id)}>
               View Request
             </button>
-            {state.step !== STEPS.DRAFT_SAVED && (
-              <button
-                className="button"
-                onClick={() =>
-                  props.onTrack(state.result.id, state.step === STEPS.STATUS_TRACKING ? "Refresh status" : "Track status")
-                }
-              >
-                <RefreshCw size={16} aria-hidden="true" />
-                {state.step === STEPS.STATUS_TRACKING ? "Refresh status" : "Track status"}
-              </button>
-            )}
+            <button
+              className="button"
+              onClick={() =>
+                props.onTrack(state.result.id, state.step === STEPS.STATUS_TRACKING ? "Refresh status" : "Track status")
+              }
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              {state.step === STEPS.STATUS_TRACKING ? "Refresh status" : "Track status"}
+            </button>
             <button className="button" onClick={() => dispatch({ type: "RESET" })}>
               Submit Another Expense
             </button>
@@ -545,7 +654,8 @@ function ReceiptActions({ onTakePhoto, onChooseFile, onDropFiles, disabled }) {
   );
 }
 
-function DateChoice({ state, dispatch }) {
+function DateChoice(props) {
+  const { state, dispatch } = props;
   const review = state.expense.dateReview;
   const { dayMonthYear, monthDayYear } = review.candidates;
   const current = state.expense.expenseDate;
@@ -565,28 +675,33 @@ function DateChoice({ state, dispatch }) {
           {formatDate(date)} <small>({how})</small>
         </button>
       ))}
+      <SaveDraftButton {...props} />
     </div>
   );
 }
 
-function Answer({ state, dispatch, categories }) {
+// Answer placeholders: what to enter, never an example answer.
+const PLACEHOLDERS = {
+  purpose: "Enter purpose",
+  location: "Enter location",
+  merchant: "Enter merchant",
+  amount: "Enter amount",
+  position: "Enter position or role",
+  department: "Enter department",
+};
+
+function Answer(props) {
+  const { state, dispatch, categories } = props;
   const field = state.question;
   const expense = state.expense;
   const active = categories.filter((category) => category.active);
-  const initial =
-    field === "category"
-      ? active.some((category) => category.name === expense.category)
-        ? expense.category
-        : ""
-      : field === "amount"
-        ? expense.amount > 0
-          ? String(expense.amount)
-          : ""
-        : String(expense[field] ?? "");
-  const [value, setValue] = useState(initial);
+  // Every answer starts empty: the employee types or picks the value.
+  const [value, setValue] = useState("");
   const inputRef = useRef(null);
   useEffect(() => {
-    inputRef.current?.focus({ preventScroll: true });
+    // Focus with a mouse or trackpad; on touch screens a programmatic focus
+    // would throw the keyboard up unasked, so the employee taps the field.
+    if (window.matchMedia("(pointer: fine)").matches) inputRef.current?.focus({ preventScroll: true });
   }, []);
   const label = QUESTIONS[field].label;
   const valid =
@@ -640,16 +755,17 @@ function Answer({ state, dispatch, categories }) {
           step={field === "amount" ? ".01" : undefined}
           min={field === "amount" ? "0" : undefined}
           maxLength={field === "amount" || field === "expenseDate" ? undefined : 500}
-          placeholder={
-            { purpose: "e.g. Client meeting with ACME", location: "e.g. Makati City" }[field] ?? ""
-          }
+          placeholder={PLACEHOLDERS[field]}
           value={value}
           onChange={(event) => setValue(event.target.value)}
         />
       )}
-      <button className="button primary" type="submit" disabled={!valid}>
-        {field === "category" ? "Confirm category" : "Continue"}
-      </button>
+      <div className="composer-answer-actions">
+        <button className="button primary" type="submit" disabled={!valid}>
+          {field === "category" ? "Confirm category" : "Continue"}
+        </button>
+        <SaveDraftButton {...props} />
+      </div>
     </form>
   );
 }
@@ -722,7 +838,8 @@ function EditDetails({ state, dispatch, categories }) {
   );
 }
 
-function ResultActions({ state, dispatch, policy, onFullDetails }) {
+function ResultActions(props) {
+  const { state, dispatch, policy, onFullDetails } = props;
   const findings = reportFindings(state.report);
   const excom = findings.find((finding) => findingKind(finding) === "excom");
   const duplicate = findings.find((finding) => findingKind(finding) === "duplicate");
@@ -785,6 +902,7 @@ function ResultActions({ state, dispatch, policy, onFullDetails }) {
         <button className="button primary" onClick={() => dispatch({ type: "SHOW_SUMMARY" })}>
           Continue
         </button>
+        <SaveDraftButton {...props} />
         <button className="button" onClick={onFullDetails}>
           Review full details
         </button>
@@ -793,7 +911,8 @@ function ResultActions({ state, dispatch, policy, onFullDetails }) {
   );
 }
 
-function SummaryActions({ state, dispatch, onSubmit, onSaveDraft, onFullDetails }) {
+function SummaryActions(props) {
+  const { state, dispatch, onSubmit, onFullDetails } = props;
   const findings = reportFindings(state.report);
   const toManager = state.report?.route === "manager_approval";
   const label = toManager ? "Submit for Approval" : "Submit";
@@ -816,10 +935,7 @@ function SummaryActions({ state, dispatch, onSubmit, onSaveDraft, onFullDetails 
           <Send size={16} aria-hidden="true" />
           {label}
         </button>
-        <button className="button" onClick={onSaveDraft}>
-          <Save size={16} aria-hidden="true" />
-          Save as Draft
-        </button>
+        <SaveDraftButton {...props} />
         <button className="button" onClick={() => dispatch({ type: "EDIT_AGAIN" })}>
           Edit details
         </button>

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { env, redactSecrets as redact } from "./env.js";
 import "../models/index.js";
+import { ensureApprovedCategories } from "../policy/approvedCategories.js";
 
 // Fail fast instead of queueing queries while disconnected.
 mongoose.set("bufferCommands", false);
@@ -38,6 +39,14 @@ export async function connectDatabase() {
     await prepareCollections();
   } catch (error) {
     console.error(`Could not prepare collections/indexes: ${redact(error.message)}`);
+  }
+  // The approved initial categories (policy/approvedCategories.js): only the
+  // missing ones are added; existing categories are never changed.
+  try {
+    const created = await ensureApprovedCategories();
+    console.info(created.length ? `Added approved categories: ${created.join("; ")}` : "Approved categories present");
+  } catch (error) {
+    console.error(`Could not ensure approved categories: ${redact(error.message)}`);
   }
   return true;
 }
