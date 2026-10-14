@@ -4,7 +4,9 @@ import { MsalProvider } from "@azure/msal-react";
 import { App } from "./App";
 import { initializeEntra, msalInstance } from "./services/entraAuth";
 import { applyTheme, getStoredTheme } from "./utils/theme";
+import "./styles/tokens.css";
 import "./styles/index.css";
+import "./styles/layout.css";
 import "./styles/mobile.css";
 
 // Apply the saved theme before the first render to avoid a flash of the wrong theme.

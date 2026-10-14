@@ -409,7 +409,6 @@ export function AssistantPage() {
     <div className="assistant-page">
       <header className="page-header assistant-header">
         <div>
-          <div className="eyebrow">WORKSPACE / NEW EXPENSE</div>
           <h1>New expense</h1>
           <p>Reimbursement Assistant · guides you from receipt to submission.</p>
         </div>
@@ -417,33 +416,35 @@ export function AssistantPage() {
           My Requests
         </Link>
       </header>
-      <section className="conversation" aria-label="Conversation with the Reimbursement Assistant">
-        <ol className="chat-log" role="log" aria-live="polite" aria-relevant="additions">
-          {state.messages.map((message, index) =>
-            renderMessage(message, index === state.messages.length - 1 ? lastMessage : undefined),
-          )}
-        </ol>
-      </section>
-      <Composer
-        composerRef={composerRef}
-        state={state}
-        busy={busy}
-        user={user}
-        authenticated={authenticated}
-        loading={loading}
-        categories={categories}
-        policy={policy}
-        dispatch={dispatch}
-        onTakePhoto={() => cameraInput.current?.click()}
-        onDropFiles={startScan}
-        onChooseFile={() => fileInput.current?.click()}
-        onRetry={retry}
-        onSubmit={submit}
-        onSaveDraft={saveDraft}
-        onTrack={track}
-        onFullDetails={openFullDetails}
-        onViewRequest={(id) => navigate(`/requests/${id}`)}
-      />
+      <div className="workspace-surface">
+        <section className="conversation" aria-label="Conversation with the Reimbursement Assistant">
+          <ol className="chat-log" role="log" aria-live="polite" aria-relevant="additions">
+            {state.messages.map((message, index) =>
+              renderMessage(message, index === state.messages.length - 1 ? lastMessage : undefined),
+            )}
+          </ol>
+        </section>
+        <Composer
+          composerRef={composerRef}
+          state={state}
+          busy={busy}
+          user={user}
+          authenticated={authenticated}
+          loading={loading}
+          categories={categories}
+          policy={policy}
+          dispatch={dispatch}
+          onTakePhoto={() => cameraInput.current?.click()}
+          onDropFiles={startScan}
+          onChooseFile={() => fileInput.current?.click()}
+          onRetry={retry}
+          onSubmit={submit}
+          onSaveDraft={saveDraft}
+          onTrack={track}
+          onFullDetails={openFullDetails}
+          onViewRequest={(id) => navigate(`/requests/${id}`)}
+        />
+      </div>
       <input
         ref={cameraInput}
         hidden

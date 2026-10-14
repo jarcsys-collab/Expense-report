@@ -19,7 +19,7 @@ export function ThemeProvider({ children }) {
     applyTheme(theme);
     const onStorage = (event) => {
       if (event.key === THEME_STORAGE_KEY || event.key === null) {
-        setThemeState(event.newValue === "light" ? "light" : "dark");
+        setThemeState(event.newValue === "dark" ? "dark" : "light");
       }
     };
     window.addEventListener("storage", onStorage);

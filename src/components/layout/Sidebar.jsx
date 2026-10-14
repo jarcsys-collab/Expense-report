@@ -1,27 +1,71 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { PanelLeftClose, PanelLeftOpen, Receipt } from "lucide-react";
+import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { config } from "../../config/appConfig";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { initials } from "../../utils/format";
 import { getNavItems } from "./navItems";
 
+// Desktop (>= 1024px): full teal sidebar, collapsible to icons (remembered on
+// this browser). Tablet (640-1023px): icon rail that opens over the page.
+// Phone (< 640px): the same element becomes the bottom navigation (mobile.css).
+const DESKTOP_QUERY = "(min-width: 1024px)";
+const COLLAPSED_KEY = "receiptflow-sidebar-collapsed";
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const onChange = () => setMatches(media.matches);
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
+
+function readCollapsed() {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 export function Sidebar() {
   const { user, authenticated } = useWorkspace();
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const [expanded, setExpanded] = useState(false);
   const location = useLocation();
   const railRef = useRef(null);
   const toggleRef = useRef(null);
   const navItems = getNavItems(user.role, authenticated);
+  // The tablet overlay only exists below the desktop breakpoint.
+  const overlayOpen = expanded && !desktop;
+  const open = desktop ? !collapsed : overlayOpen;
   function closeRail() {
     setExpanded(false);
     toggleRef.current?.focus();
   }
+  function toggle() {
+    if (desktop) {
+      const next = !collapsed;
+      setCollapsed(next);
+      try {
+        localStorage.setItem(COLLAPSED_KEY, String(next));
+      } catch {
+        // Not saved on this browser; the sidebar still toggles.
+      }
+    } else {
+      setExpanded((current) => !current);
+    }
+  }
   useEffect(() => {
     setExpanded(false);
-  }, [location.pathname]);
+  }, [location.pathname, desktop]);
   useEffect(() => {
-    if (!expanded) {
+    if (!overlayOpen) {
       return;
     }
     const mainShell = document.querySelector(".main-shell");
@@ -60,10 +104,11 @@ export function Sidebar() {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [expanded]);
+  }, [overlayOpen]);
+  const toggleLabel = open ? "Collapse navigation" : "Expand navigation";
   return (
     <>
-      {expanded && (
+      {overlayOpen && (
         <button
           className="rail-backdrop"
           aria-label="Close navigation"
@@ -73,31 +118,31 @@ export function Sidebar() {
       )}
       <aside
         ref={railRef}
-        className={`mobile-rail ${expanded ? "expanded" : ""}`}
+        className={`mobile-rail${overlayOpen ? " expanded" : ""}${desktop && collapsed ? " collapsed" : ""}`}
         aria-label="Workspace sidebar"
       >
-        <div className="rail-brand">
-          <span className="brand-icon">
-            <Receipt size={21} />
-          </span>
-          <strong className="rail-label">{config.appName}</strong>
+        <div className="rail-head">
+          <div className="rail-brand">
+            <span className="brand-icon">
+              <Receipt size={22} />
+            </span>
+            <span className="rail-label">
+              <strong>{config.appName}</strong>
+              <small>{config.accountName} · Expenses</small>
+            </span>
+          </div>
+          <button
+            ref={toggleRef}
+            className="rail-toggle"
+            aria-label={toggleLabel}
+            aria-expanded={open}
+            aria-controls="mobile-rail-links"
+            title={toggleLabel}
+            onClick={toggle}
+          >
+            {open ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+          </button>
         </div>
-        <button
-          ref={toggleRef}
-          className="rail-toggle"
-          aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
-          aria-expanded={expanded}
-          aria-controls="mobile-rail-links"
-          title={expanded ? "Collapse navigation" : "Expand navigation"}
-          onClick={() => setExpanded((current) => !current)}
-        >
-          {expanded ? (
-            <PanelLeftClose size={21} />
-          ) : (
-            <PanelLeftOpen size={21} />
-          )}
-          <span className="rail-label">Collapse menu</span>
-        </button>
         <nav id="mobile-rail-links" aria-label="Workspace navigation">
           {navItems.map(({ to, label, short, phone, icon: Icon }) => (
             <NavLink
@@ -108,7 +153,7 @@ export function Sidebar() {
               data-phone={phone ? "true" : undefined}
               onClick={() => setExpanded(false)}
             >
-              <Icon size={21} />
+              <Icon size={20} />
               <span className="rail-label">{label}</span>
               <span className="rail-short" aria-hidden="true">
                 {short}

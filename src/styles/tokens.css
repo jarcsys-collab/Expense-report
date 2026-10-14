@@ -1,0 +1,136 @@
+/*
+ * ReceiptFlow design tokens: the one place colors, type, radii and shadows are
+ * defined. The light teal-and-white theme is the default; dark mode is opt-in
+ * from Settings (html[data-theme="dark"]). Components use these variables
+ * only, so a theme is just a different set of values here.
+ */
+@import "@fontsource/poppins/latin-400.css";
+@import "@fontsource/poppins/latin-ext-400.css";
+@import "@fontsource/poppins/latin-500.css";
+@import "@fontsource/poppins/latin-ext-500.css";
+@import "@fontsource/poppins/latin-600.css";
+@import "@fontsource/poppins/latin-ext-600.css";
+@import "@fontsource/poppins/latin-700.css";
+@import "@fontsource/poppins/latin-ext-700.css";
+
+:root {
+  color-scheme: light;
+
+  /* Type */
+  --font-sans:
+    Poppins, "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+
+  /* Brand */
+  --primary: #00a5a8; /* accents, icons, focus, progress */
+  --primary-strong: #00828a; /* filled buttons and sidebar (white text passes AA) */
+  --primary-hover: #00737a;
+  --on-primary: #ffffff;
+  --sidebar-bg: #00828a;
+  --sidebar-bg-top: #0b888e;
+  --sidebar-ink: #ffffff;
+  --sidebar-ink-muted: #d3eeee;
+  --sidebar-hover: rgb(255 255 255 / 0.12);
+  --sidebar-outline: rgb(255 255 255 / 0.22);
+
+  /* Surfaces */
+  --theme-canvas: #ffffff; /* main canvas */
+  --theme-workspace: #f4f5f6; /* soft gray workspace panel */
+  --theme-panel: #ffffff; /* cards, rows, dialogs */
+  --theme-control: #f0f2f3; /* secondary surfaces, quiet buttons */
+  --theme-input: #ffffff;
+  --theme-overlay: rgb(16 32 36 / 0.42);
+
+  /* Text and lines */
+  --theme-text: #181a1f;
+  --theme-text-soft: #404249;
+  --theme-muted: #6b7079;
+  --theme-border: #e4e7e9;
+  --theme-border-strong: #d3d8db;
+
+  /* Status: soft background + readable ink (AA on the background) */
+  --theme-teal-bg: #e3f4f4;
+  --theme-teal-ink: #00737b;
+  --theme-success: #12a45a;
+  --theme-success-bg: #e4f5ea;
+  --theme-success-ink: #0b7a40;
+  --theme-warning: #d69b17;
+  --theme-warning-bg: #fcf3dc;
+  --theme-warning-ink: #8a6408;
+  --theme-warning-border: #f0dca8;
+  --theme-danger: #dc4b55;
+  --theme-danger-bg: #fde9ea;
+  --theme-danger-ink: #b3373f;
+  --theme-danger-border: #f5c6ca;
+  --theme-info-bg: #e7f0fa;
+  --theme-info-ink: #2a5f86;
+  --theme-neutral-bg: #eceff2;
+  --theme-neutral-ink: #4a5361;
+
+  /* Shape */
+  --radius-shell: 32px;
+  --radius-panel: 24px;
+  --radius-card: 18px;
+  --radius-input: 12px;
+  --radius-button: 14px;
+  --radius-dialog: 22px;
+  --radius-pill: 999px;
+
+  /* Depth */
+  --shadow-sm: 0 1px 2px rgb(16 24 32 / 0.05);
+  --shadow-card: 0 1px 2px rgb(16 24 32 / 0.04), 0 4px 14px rgb(16 24 32 / 0.05);
+  --shadow-pop: 0 18px 48px rgb(16 24 32 / 0.16);
+  --focus-ring: 0 0 0 3px rgb(0 165 168 / 0.28);
+
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --primary: #19b9bc;
+  --primary-strong: #0a8f95;
+  --primary-hover: #0aa1a6;
+  --on-primary: #ffffff;
+  --sidebar-bg: #0c3c40;
+  --sidebar-bg-top: #0f4448;
+  --sidebar-ink: #f1fafa;
+  --sidebar-ink-muted: #a9cccc;
+  --sidebar-hover: rgb(255 255 255 / 0.08);
+  --sidebar-outline: rgb(255 255 255 / 0.16);
+
+  --theme-canvas: #121616;
+  --theme-workspace: #171c1c;
+  --theme-panel: #1e2323;
+  --theme-control: #262c2c;
+  --theme-input: #191d1d;
+  --theme-overlay: rgb(0 0 0 / 0.6);
+
+  --theme-text: #eef3f3;
+  --theme-text-soft: #c8d2d3;
+  --theme-muted: #9aa8aa;
+  --theme-border: #2f3737;
+  --theme-border-strong: #3d4747;
+
+  --theme-teal-bg: #163c3d;
+  --theme-teal-ink: #6fd8d6;
+  --theme-success: #3ccf86;
+  --theme-success-bg: #1d3628;
+  --theme-success-ink: #85dba7;
+  --theme-warning: #e7b740;
+  --theme-warning-bg: #372f1f;
+  --theme-warning-ink: #ecc977;
+  --theme-warning-border: #5e5130;
+  --theme-danger: #f0727a;
+  --theme-danger-bg: #3d2629;
+  --theme-danger-ink: #ffaaaf;
+  --theme-danger-border: #6a3b40;
+  --theme-info-bg: #1d2f3b;
+  --theme-info-ink: #a1cdee;
+  --theme-neutral-bg: #2b3233;
+  --theme-neutral-ink: #c0cacc;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.25), 0 6px 18px rgb(0 0 0 / 0.2);
+  --shadow-pop: 0 18px 48px rgb(0 0 0 / 0.5);
+  --focus-ring: 0 0 0 3px rgb(25 185 188 / 0.35);
+}

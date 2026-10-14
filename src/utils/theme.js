@@ -1,16 +1,15 @@
 export const THEME_STORAGE_KEY = "receiptflow-theme";
+// Light (teal and white) is the default; a saved "dark" choice is kept.
 export function getStoredTheme() {
   try {
-    return localStorage.getItem(THEME_STORAGE_KEY) === "light"
-      ? "light"
-      : "dark";
+    return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
   } catch {
-    return "dark";
+    return "light";
   }
 }
 export function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute("content", theme === "light" ? "#f5f8f7" : "#161818");
+    ?.setAttribute("content", theme === "dark" ? "#121616" : "#ffffff");
 }

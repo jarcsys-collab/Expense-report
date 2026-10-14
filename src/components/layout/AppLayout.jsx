@@ -4,6 +4,7 @@ import { WifiOff } from "lucide-react";
 import { config } from "../../config/appConfig";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { Sidebar } from "./Sidebar";
+import { TopBar } from "./TopBar";
 
 export function AppLayout() {
   const { online, authenticated, loading } = useWorkspace();
@@ -48,6 +49,7 @@ export function AppLayout() {
       className={`app-shell ${location.pathname.startsWith("/review/") ? "review-screen" : ""}`}
     >
       <div className="main-shell">
+        <TopBar />
         {!online && (
           <div className="offline" role="status">
             <WifiOff size={17} />

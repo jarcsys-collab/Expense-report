@@ -1,0 +1,367 @@
+/*
+ * App shell: teal sidebar, white canvas with a rounded corner, top bar and the
+ * soft gray workspace surface that holds each page's content.
+ * Desktop >= 1024px, tablet 640-1023px here; phone (< 640px) is in mobile.css.
+ */
+
+.app-shell {
+  --rail-width: 264px;
+  display: grid;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--sidebar-bg);
+}
+.app-shell:has(.mobile-rail.collapsed) {
+  --rail-width: 88px;
+}
+.main-shell {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 0;
+  min-height: 100dvh;
+  background: var(--theme-canvas);
+  border-radius: var(--radius-shell) 0 0 0;
+}
+main {
+  padding: 4px 32px 40px;
+}
+.main-shell > .offline {
+  margin: 0 32px 12px;
+}
+
+/* ---------- Top bar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 80px;
+  padding: 18px 32px 10px;
+}
+.topbar-brand {
+  display: none;
+}
+.breadcrumbs {
+  min-width: 0;
+}
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--theme-muted);
+  font-size: 15px;
+}
+.breadcrumbs li + li::before {
+  content: "/";
+  margin-right: 10px;
+  color: var(--theme-border-strong);
+}
+.breadcrumbs a:hover {
+  color: var(--theme-text);
+  text-decoration: underline;
+}
+.breadcrumbs [aria-current="page"] {
+  color: var(--theme-teal-ink);
+  font-weight: 600;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px 4px 4px 16px;
+  border-radius: var(--radius-pill);
+  transition: background 0.15s;
+}
+.topbar-user:hover {
+  background: var(--theme-control);
+}
+.topbar-user-text {
+  min-width: 0;
+  text-align: right;
+}
+.topbar-user-text strong,
+.topbar-user-text small {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-user-text strong {
+  font-size: 13px;
+}
+.topbar-user-text small {
+  color: var(--theme-muted);
+  text-transform: capitalize;
+}
+.topbar .avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 15px;
+}
+.topbar-sign-in {
+  border-radius: var(--radius-pill);
+}
+
+/* ---------- Workspace surface ---------- */
+.workspace-surface {
+  min-height: calc(100dvh - 240px);
+  padding: 24px;
+  background: var(--theme-workspace);
+  border-radius: var(--radius-panel);
+}
+.workspace-surface > :last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- Sidebar ---------- */
+.mobile-rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: var(--rail-width);
+  height: 100dvh;
+  padding: max(24px, env(safe-area-inset-top)) 0 max(20px, env(safe-area-inset-bottom)) 18px;
+  color: var(--sidebar-ink);
+  background: linear-gradient(180deg, var(--sidebar-bg-top), var(--sidebar-bg) 240px);
+  overflow: hidden auto;
+  transition: width 0.22s;
+}
+.mobile-rail svg {
+  flex-shrink: 0;
+}
+.rail-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  margin-bottom: 24px;
+  padding-right: 14px;
+}
+.rail-brand {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.rail-brand .brand-icon {
+  flex-shrink: 0;
+}
+.rail-brand strong,
+.rail-brand small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-brand strong {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+}
+.rail-brand small {
+  margin-top: 2px;
+  color: var(--sidebar-ink-muted);
+  font-size: 12px;
+}
+.rail-toggle {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--sidebar-ink);
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+.rail-toggle:hover {
+  background: var(--sidebar-hover);
+}
+.rail-label {
+  min-width: 0;
+  white-space: nowrap;
+}
+.mobile-rail nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mobile-rail nav > a {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 14px;
+  min-height: 50px;
+  padding: 0 16px;
+  color: var(--sidebar-ink);
+  border-radius: 16px 0 0 16px;
+  font-size: 15px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.mobile-rail nav > a:hover {
+  background: var(--sidebar-hover);
+}
+.mobile-rail nav > a:focus-visible,
+.rail-toggle:focus-visible,
+.rail-profile:focus-visible {
+  outline: 2px solid var(--sidebar-ink);
+  outline-offset: -2px;
+}
+/* Active page: a white tab that joins the canvas, with curved corners. */
+.mobile-rail nav > a.active {
+  color: var(--theme-teal-ink);
+  background: var(--theme-canvas);
+  font-weight: 600;
+}
+.mobile-rail nav > a.active::before,
+.mobile-rail nav > a.active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+.mobile-rail nav > a.active::before {
+  top: -20px;
+  background: radial-gradient(circle at 0 0, transparent 19.5px, var(--theme-canvas) 20px);
+}
+.mobile-rail nav > a.active::after {
+  bottom: -20px;
+  background: radial-gradient(circle at 0 100%, transparent 19.5px, var(--theme-canvas) 20px);
+}
+.rail-profile {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  margin: auto 14px 0 0;
+  padding: 0 10px;
+  color: var(--sidebar-ink);
+  border: 1px solid var(--sidebar-outline);
+  border-radius: 16px;
+  transition: background 0.15s;
+}
+.rail-profile:hover,
+.rail-profile.active {
+  background: var(--sidebar-hover);
+}
+.rail-profile .avatar {
+  flex-shrink: 0;
+  color: var(--sidebar-bg);
+  background: #fff;
+}
+.rail-profile strong,
+.rail-profile small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rail-profile strong {
+  font-size: 13px;
+}
+.rail-profile small {
+  margin-top: 2px;
+  color: var(--sidebar-ink-muted);
+  font-size: 12px;
+}
+.rail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: block;
+  background: var(--theme-overlay);
+}
+
+/* Icon-only rail: collapsed on desktop, the resting state on tablets. */
+.mobile-rail.collapsed .rail-label {
+  display: none;
+}
+.mobile-rail.collapsed .rail-head {
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 18px;
+}
+.mobile-rail.collapsed .rail-brand {
+  flex: 0 0 auto;
+}
+.mobile-rail.collapsed .rail-profile {
+  justify-content: center;
+  margin-right: 18px;
+  padding: 0;
+  border-color: transparent;
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .app-shell {
+    --rail-width: 88px;
+  }
+  main {
+    padding: 4px 24px 32px;
+  }
+  .main-shell > .offline {
+    margin: 0 24px 12px;
+  }
+  .topbar {
+    min-height: 68px;
+    padding: 14px 24px 8px;
+  }
+  .workspace-surface {
+    padding: 18px;
+  }
+  .mobile-rail:not(.expanded) .rail-label {
+    display: none;
+  }
+  .mobile-rail:not(.expanded) .rail-head {
+    flex-direction: column;
+    gap: 10px;
+    padding-right: 18px;
+  }
+  .mobile-rail:not(.expanded) .rail-brand {
+    flex: 0 0 auto;
+  }
+  .mobile-rail:not(.expanded) .rail-profile {
+    justify-content: center;
+    margin-right: 18px;
+    padding: 0;
+    border-color: transparent;
+  }
+  /* Opened over the page, not pushing it. */
+  .mobile-rail.expanded {
+    width: 272px;
+    box-shadow: var(--shadow-pop);
+  }
+  .mobile-rail.expanded nav > a.active::before,
+  .mobile-rail.expanded nav > a.active::after {
+    display: none;
+  }
+  .mobile-rail.expanded nav > a.active {
+    border-radius: 16px;
+    margin-right: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-rail {
+    transition: none;
+  }
+}

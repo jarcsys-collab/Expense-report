@@ -337,662 +337,664 @@ export function ReviewPage() {
           · REVIEW REQUIRED
         </span>
       </header>
-      <div className="workflow-strip" aria-label="Receipt workflow">
-        <span>1. Capture</span>
-        <strong>2. Verify & check</strong>
-        <span>3. Submit</span>
-      </div>
-      <div className="review-health-bar">
-        <span>
-          {validateExpense(expense, categories).length
-            ? `${validateExpense(expense, categories).length} required details need attention`
-            : "Required details complete"}
-        </span>
-        <button
-          className="text-button"
-          onClick={() => {
-            return document.getElementById("expense-check")?.scrollIntoView({
-              behavior: "smooth",
-            });
-          }}
-        >
-          Review Expense Check ↓
-        </button>
-      </div>
-      <div className="review-layout">
-        <aside className="review-preview" id="expense-receipt" tabIndex={-1}>
-          <details open>
-            <summary>
-              {"Receipt preview · "}
-              {expense.receiptFiles.length}{" "}
-              {expense.receiptFiles.length === 1 ? "file" : "sections"}
-            </summary>
-            {expense.receiptFiles.length > 1 && (
-              <select
-                aria-label="Receipt section"
-                value={fileIndex}
-                onChange={(event) => setFileIndex(Number(event.target.value))}
-              >
-                {expense.receiptFiles.map((file, index) => (
-                  <option key={file.id} value={index}>
-                    {"Section "}
-                    {index + 1}
-                    {" · "}
-                    {file.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            {expense.receiptFiles[fileIndex] ? (
-              <>
-                <ReceiptViewer file={expense.receiptFiles[fileIndex]} />
-                {expense.receiptFiles[fileIndex].mimeType.startsWith(
-                  "image/",
-                ) && (
-                  <button
-                    className="button image-edit-button"
-                    type="button"
-                    onClick={() => setImageEditorOpen(true)}
-                  >
-                    Crop / rotate image
-                  </button>
-                )}
-              </>
-            ) : (
-              <div className="empty">No receipt attached</div>
-            )}
-          </details>
-          <div>
-            <button
-              type="button"
-              className="button image-edit-button"
-              disabled={saving}
-              onClick={() => {
-                return attachInputRef.current?.click();
-              }}
-            >
-              Attach receipt
-            </button>
-            <input
-              ref={attachInputRef}
-              type="file"
-              hidden
-              accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.pdf"
-              disabled={saving}
-              onChange={async (event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (!!file) {
-                  setSaving(true);
-                  try {
-                    const savedFile = await run(async () => {
-                      validateReceiptFile(file);
-                      return api.saveEditedFile(
-                        file,
-                        expense.receiptFiles.length + 1,
-                      );
-                    });
-                    if (savedFile) {
-                      setExpense((current) => ({
-                        ...current,
-                        receiptFiles: [...current.receiptFiles, savedFile],
-                      }));
-                      setFileIndex(expense.receiptFiles.length);
-                    }
-                  } finally {
-                    setSaving(false);
-                  }
-                }
-              }}
-            />
-          </div>
-          <div className="review-note">
-            <Check size={17} />
-            <p>Check your receipt and expense details before submitting.</p>
-          </div>
-          {expense.extractionNotes?.length ? (
-            <div className="panel form-panel">
-              <h3>Check before submitting</h3>
-              {expense.extractionNotes.map((note) => (
-                <p key={note} className="muted">
-                  {note}
-                </p>
-              ))}
-            </div>
-          ) : null}
-          {expense.ocrText && (
-            <details className="panel form-panel">
-              <summary>Recognized receipt text</summary>
-              <pre
-                style={{
-                  whiteSpace: "pre-wrap",
-                  overflowWrap: "anywhere",
-                  maxHeight: 300,
-                  overflow: "auto",
-                  fontSize: 12,
+      <div className="workspace-surface">
+        <div className="workflow-strip" aria-label="Receipt workflow">
+          <span>1. Capture</span>
+          <strong>2. Verify & check</strong>
+          <span>3. Submit</span>
+        </div>
+        <div className="review-health-bar">
+          <span>
+            {validateExpense(expense, categories).length
+              ? `${validateExpense(expense, categories).length} required details need attention`
+              : "Required details complete"}
+          </span>
+          <button
+            className="text-button"
+            onClick={() => {
+              return document.getElementById("expense-check")?.scrollIntoView({
+                behavior: "smooth",
+              });
+            }}
+          >
+            Review Expense Check ↓
+          </button>
+        </div>
+        <div className="review-layout">
+          <aside className="review-preview" id="expense-receipt" tabIndex={-1}>
+            <details open>
+              <summary>
+                {"Receipt preview · "}
+                {expense.receiptFiles.length}{" "}
+                {expense.receiptFiles.length === 1 ? "file" : "sections"}
+              </summary>
+              {expense.receiptFiles.length > 1 && (
+                <select
+                  aria-label="Receipt section"
+                  value={fileIndex}
+                  onChange={(event) => setFileIndex(Number(event.target.value))}
+                >
+                  {expense.receiptFiles.map((file, index) => (
+                    <option key={file.id} value={index}>
+                      {"Section "}
+                      {index + 1}
+                      {" · "}
+                      {file.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {expense.receiptFiles[fileIndex] ? (
+                <>
+                  <ReceiptViewer file={expense.receiptFiles[fileIndex]} />
+                  {expense.receiptFiles[fileIndex].mimeType.startsWith(
+                    "image/",
+                  ) && (
+                    <button
+                      className="button image-edit-button"
+                      type="button"
+                      onClick={() => setImageEditorOpen(true)}
+                    >
+                      Crop / rotate image
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="empty">No receipt attached</div>
+              )}
+            </details>
+            <div>
+              <button
+                type="button"
+                className="button image-edit-button"
+                disabled={saving}
+                onClick={() => {
+                  return attachInputRef.current?.click();
                 }}
               >
-                {expense.ocrText}
-              </pre>
-            </details>
-          )}
-        </aside>
-        <form
-          className="review-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            save(true);
-          }}
-        >
-          <div className="panel form-panel" id="expense-details" tabIndex={-1}>
-            <div className="form-title">
-              <h3>Expense details</h3>
-              <span className="muted">* Required</span>
-            </div>
-            {validationErrors.length > 0 && (
-              <div className="validation-errors" role="alert">
-                {validationErrors.map((message) => (
-                  <p key={message} id={`error-${fieldForMessage(message)}`}>
-                    <button
-                      className="text-button"
-                      type="button"
-                      onClick={() =>
-                        focusExpenseField(fieldForMessage(message))
+                Attach receipt
+              </button>
+              <input
+                ref={attachInputRef}
+                type="file"
+                hidden
+                accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.pdf"
+                disabled={saving}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!!file) {
+                    setSaving(true);
+                    try {
+                      const savedFile = await run(async () => {
+                        validateReceiptFile(file);
+                        return api.saveEditedFile(
+                          file,
+                          expense.receiptFiles.length + 1,
+                        );
+                      });
+                      if (savedFile) {
+                        setExpense((current) => ({
+                          ...current,
+                          receiptFiles: [...current.receiptFiles, savedFile],
+                        }));
+                        setFileIndex(expense.receiptFiles.length);
                       }
-                    >
-                      {message}
-                    </button>
+                    } finally {
+                      setSaving(false);
+                    }
+                  }
+                }}
+              />
+            </div>
+            <div className="review-note">
+              <Check size={17} />
+              <p>Check your receipt and expense details before submitting.</p>
+            </div>
+            {expense.extractionNotes?.length ? (
+              <div className="panel form-panel">
+                <h3>Check before submitting</h3>
+                {expense.extractionNotes.map((note) => (
+                  <p key={note} className="muted">
+                    {note}
                   </p>
                 ))}
               </div>
+            ) : null}
+            {expense.ocrText && (
+              <details className="panel form-panel">
+                <summary>Recognized receipt text</summary>
+                <pre
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "anywhere",
+                    maxHeight: 300,
+                    overflow: "auto",
+                    fontSize: 12,
+                  }}
+                >
+                  {expense.ocrText}
+                </pre>
+              </details>
             )}
-            <h4 className="form-group-title">Employee information</h4>
-            <div className="form-grid">
-              {renderField("Employee name", "employeeName", "text", true, {
-                readOnly: Boolean(user.id),
-              })}
-              {renderField(
-                "Position / role",
-                "position",
-                "text",
-                !expense.identityVerified,
-                {
-                  readOnly: expense.identityVerified,
-                  emptyText: "Not provided in Microsoft profile",
-                },
+          </aside>
+          <form
+            className="review-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              save(true);
+            }}
+          >
+            <div className="panel form-panel" id="expense-details" tabIndex={-1}>
+              <div className="form-title">
+                <h3>Expense details</h3>
+                <span className="muted">* Required</span>
+              </div>
+              {validationErrors.length > 0 && (
+                <div className="validation-errors" role="alert">
+                  {validationErrors.map((message) => (
+                    <p key={message} id={`error-${fieldForMessage(message)}`}>
+                      <button
+                        className="text-button"
+                        type="button"
+                        onClick={() =>
+                          focusExpenseField(fieldForMessage(message))
+                        }
+                      >
+                        {message}
+                      </button>
+                    </p>
+                  ))}
+                </div>
               )}
-              {renderField(
-                "Department",
-                "department",
-                "text",
-                !expense.identityVerified,
-                {
-                  readOnly: expense.identityVerified,
-                  emptyText: "Not provided in Microsoft profile",
-                },
-              )}
-              {expense.identityVerified &&
-                renderField("Email", "employeeEmail", "email", false, {
-                  readOnly: true,
-                  emptyText: "Not provided in Microsoft profile",
-                })}
-            </div>
-            <h4 className="form-group-title">Expense information</h4>
-            <div className="form-grid">
-              {renderField("Receipt date", "expenseDate", "date", true)}
-              <label className="field">
-                <span>
-                  Category *
-                  {expense.ocrConfidence.category !== undefined &&
-                    expense.ocrConfidence.category < config.confidence && (
-                      <small>● Needs review</small>
-                    )}
-                </span>
-                <select
-                  required
-                  id="expense-category"
-                  value={expense.category}
-                  disabled={saving}
-                  onChange={(event) => setField("category", event.target.value)}
-                >
-                  <option value="">Select category</option>
-                  {expense.category &&
-                    !categories.some(
-                      (category) =>
-                        category.active && category.name === expense.category,
-                    ) && (
-                      <option value={expense.category}>
-                        {expense.category}
-                        {" (check policy)"}
-                      </option>
-                    )}
-                  {categories
-                    .filter((category) => category.active)
-                    .map((category) => (
-                      <option key={category.id}>{category.name}</option>
-                    ))}
-                </select>
-              </label>
-              {renderField("Total amount", "amount", "number", true)}
-              <label className="field">
-                <span>
-                  Currency *
-                  {expense.ocrConfidence.currency !== undefined &&
-                    expense.ocrConfidence.currency < config.confidence && (
-                      <small>● Needs review</small>
-                    )}
-                </span>
-                <select
-                  id="expense-currency"
-                  value={expense.currency}
-                  disabled={saving}
-                  onChange={(event) => setField("currency", event.target.value)}
-                >
-                  {[
-                    ...new Set([
-                      expense.currency,
-                      "PHP",
-                      "USD",
-                      "EUR",
-                      "GBP",
-                      "SGD",
-                      "JPY",
-                      "AUD",
-                      "CAD",
-                    ]),
-                  ]
-                    .filter(Boolean)
-                    .map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                </select>
-              </label>
-              {renderField("Business purpose", "purpose", "text", true)}
-              {renderField("Location", "location", "text", true)}
-              {renderField("Merchant", "merchant", "text", true)}
-              <label className="field">
-                <span>Status · set by workflow</span>
-                <input value={expense.status} readOnly />
-              </label>
-              {renderField("Payment method", "paymentMethod")}
-              {renderField("Receipt number", "receiptNumber")}
-              {renderField("Subtotal", "subtotal", "number")}
-              {renderField("Tax", "tax", "number")}
-            </div>
-            <PolicyExceptions
-              expense={expense}
-              expenseId={savedId}
-              disabled={saving}
-              onEvidenceChange={(evidence) => setField("excomEvidence", evidence)}
-            />
-            <h4 className="form-group-title">Receipt</h4>
-            <ReceiptAssociation expense={expense} />
-            <details className="additional-fields">
-              <summary>Additional receipt & accounting details</summary>
+              <h4 className="form-group-title">Employee information</h4>
               <div className="form-grid">
-                {renderField("Merchant address", "merchantAddress")}
-                {renderField("Time", "expenseTime", "time")}
-                {renderField("Service charge", "serviceCharge", "number")}
-                {renderField("Tip / gratuity", "tip", "number")}
-                {renderField("Discount", "discount", "number")}
-                {renderField("Card last four", "cardLastFour")}
-                {renderField("Cost center", "costCenter")}
-                {renderField("Project", "project")}
-                {renderField("Notes", "notes")}
+                {renderField("Employee name", "employeeName", "text", true, {
+                  readOnly: Boolean(user.id),
+                })}
+                {renderField(
+                  "Position / role",
+                  "position",
+                  "text",
+                  !expense.identityVerified,
+                  {
+                    readOnly: expense.identityVerified,
+                    emptyText: "Not provided in Microsoft profile",
+                  },
+                )}
+                {renderField(
+                  "Department",
+                  "department",
+                  "text",
+                  !expense.identityVerified,
+                  {
+                    readOnly: expense.identityVerified,
+                    emptyText: "Not provided in Microsoft profile",
+                  },
+                )}
+                {expense.identityVerified &&
+                  renderField("Email", "employeeEmail", "email", false, {
+                    readOnly: true,
+                    emptyText: "Not provided in Microsoft profile",
+                  })}
               </div>
-            </details>
-          </div>
-          <div className="panel form-panel">
-            <div className="form-title">
-              <h3>Line items</h3>
-              <button
-                type="button"
-                className="text-button"
-                onClick={() =>
-                  setField("lineItems", [
-                    ...expense.lineItems,
-                    {
-                      id: createId(),
-                      description: "",
-                      quantity: 1,
-                      unitPrice: 0,
-                      total: 0,
-                    },
-                  ])
-                }
-              >
-                <Plus size={15} />
-                Add item
-              </button>
-            </div>
-            <div className="line-items" id="expense-lineItems" tabIndex={-1}>
-              {expense.lineItems.map((lineItem, index) => (
-                <div
-                  key={lineItem.id}
-                  className={`line-item ${[lineItem.confidence, ...Object.values(lineItem.fieldConfidence || {})].some((item) => item !== undefined && item < config.confidence) ? "low-confidence" : ""}`}
-                >
-                  <label>
-                    Description
+              <h4 className="form-group-title">Expense information</h4>
+              <div className="form-grid">
+                {renderField("Receipt date", "expenseDate", "date", true)}
+                <label className="field">
+                  <span>
+                    Category *
+                    {expense.ocrConfidence.category !== undefined &&
+                      expense.ocrConfidence.category < config.confidence && (
+                        <small>● Needs review</small>
+                      )}
+                  </span>
+                  <select
+                    required
+                    id="expense-category"
+                    value={expense.category}
+                    disabled={saving}
+                    onChange={(event) => setField("category", event.target.value)}
+                  >
+                    <option value="">Select category</option>
+                    {expense.category &&
+                      !categories.some(
+                        (category) =>
+                          category.active && category.name === expense.category,
+                      ) && (
+                        <option value={expense.category}>
+                          {expense.category}
+                          {" (check policy)"}
+                        </option>
+                      )}
+                    {categories
+                      .filter((category) => category.active)
+                      .map((category) => (
+                        <option key={category.id}>{category.name}</option>
+                      ))}
+                  </select>
+                </label>
+                {renderField("Total amount", "amount", "number", true)}
+                <label className="field">
+                  <span>
+                    Currency *
+                    {expense.ocrConfidence.currency !== undefined &&
+                      expense.ocrConfidence.currency < config.confidence && (
+                        <small>● Needs review</small>
+                      )}
+                  </span>
+                  <select
+                    id="expense-currency"
+                    value={expense.currency}
+                    disabled={saving}
+                    onChange={(event) => setField("currency", event.target.value)}
+                  >
                     {[
-                      lineItem.confidence,
-                      ...Object.values(lineItem.fieldConfidence || {}),
-                    ].some(
-                      (item) => item !== undefined && item < config.confidence,
-                    ) && (
-                      <small className="line-confidence">● Needs review</small>
-                    )}
-                    <input
-                      aria-label={`Item ${index + 1} description`}
-                      disabled={saving}
-                      value={lineItem.description}
-                      onChange={(event) =>
-                        setField(
-                          "lineItems",
-                          expense.lineItems.map((currentItem) =>
-                            currentItem.id === lineItem.id
-                              ? {
-                                  ...currentItem,
-                                  description: event.target.value,
-                                }
-                              : currentItem,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
-                  <label>
-                    Qty
-                    <input
-                      type="number"
-                      min="0.01"
-                      step=".01"
-                      value={lineItem.quantity}
-                      disabled={saving}
-                      onChange={(event) =>
-                        setField(
-                          "lineItems",
-                          expense.lineItems.map((currentItem) =>
-                            currentItem.id === lineItem.id
-                              ? {
-                                  ...currentItem,
-                                  quantity: Number(event.target.value),
-                                  total: Number(
-                                    (
-                                      Number(event.target.value) *
-                                      currentItem.unitPrice
-                                    ).toFixed(2),
-                                  ),
-                                }
-                              : currentItem,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
-                  <label>
-                    Unit price
-                    <input
-                      type="number"
-                      min="0"
-                      step=".01"
-                      value={lineItem.unitPrice}
-                      disabled={saving}
-                      onChange={(event) =>
-                        setField(
-                          "lineItems",
-                          expense.lineItems.map((currentItem) =>
-                            currentItem.id === lineItem.id
-                              ? {
-                                  ...currentItem,
-                                  unitPrice: Number(event.target.value),
-                                  total: Number(
-                                    (
-                                      Number(event.target.value) *
-                                      currentItem.quantity
-                                    ).toFixed(2),
-                                  ),
-                                }
-                              : currentItem,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
-                  <label>
-                    Total price
-                    <input
-                      aria-label={`Item ${index + 1} total price`}
-                      disabled={saving}
-                      type="number"
-                      min="0"
-                      step=".01"
-                      value={lineItem.total}
-                      onChange={(event) =>
-                        setField(
-                          "lineItems",
-                          expense.lineItems.map((currentItem) =>
-                            currentItem.id === lineItem.id
-                              ? {
-                                  ...currentItem,
-                                  total: Number(event.target.value),
-                                }
-                              : currentItem,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={`Remove item ${index + 1}`}
-                    onClick={() =>
-                      setField(
-                        "lineItems",
-                        expense.lineItems.filter(
-                          (currentItem) => currentItem.id !== lineItem.id,
-                        ),
-                      )
-                    }
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            {expense.lineItems.length > 0 &&
-              Math.abs(
-                expense.lineItems.reduce((sum, item) => sum + item.total, 0) -
-                  expense.subtotal,
-              ) > 0.02 && (
-                <p className="warning-note">
-                  Line items do not match the subtotal. Check the receipt.
-                </p>
-              )}
-          </div>
-          <ExpenseCheck
-            expense={expense}
-            all={expenses}
-            categories={categories}
-            editable
-          />
-          {duplicate && (
-            <section
-              className="panel form-panel"
-              id="expense-duplicate"
-              tabIndex={-1}
-            >
-              <h3>Compare possible duplicate</h3>
-              <div className="duplicate-comparison">
-                <div>
-                  <small>Current expense</small>
-                  <h4>{expense.merchant}</h4>
-                  <strong>
-                    {formatCurrency(expense.amount, expense.currency)}
-                  </strong>
-                  <p>{expense.expenseDate}</p>
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() => {
-                      return document
-                        .getElementById("expense-receipt")
-                        ?.scrollIntoView({
-                          behavior: "smooth",
-                        });
-                    }}
-                  >
-                    View current receipt
-                  </button>
-                </div>
-                <div>
-                  <small>
-                    {"Possible match · "}
-                    {duplicate.requestNumber}
-                  </small>
-                  <h4>{duplicate.merchant}</h4>
-                  <strong>
-                    {formatCurrency(duplicate.amount, duplicate.currency)}
-                  </strong>
-                  <p>{duplicate.expenseDate}</p>
-                  <a
-                    className="text-button"
-                    href={`#/requests/${duplicate.id}`}
-                    target="_blank"
-                    rel="noopener"
-                  >
-                    View original expense & receipt
-                  </a>
-                </div>
+                      ...new Set([
+                        expense.currency,
+                        "PHP",
+                        "USD",
+                        "EUR",
+                        "GBP",
+                        "SGD",
+                        "JPY",
+                        "AUD",
+                        "CAD",
+                      ]),
+                    ]
+                      .filter(Boolean)
+                      .map((item) => (
+                        <option key={item}>{item}</option>
+                      ))}
+                  </select>
+                </label>
+                {renderField("Business purpose", "purpose", "text", true)}
+                {renderField("Location", "location", "text", true)}
+                {renderField("Merchant", "merchant", "text", true)}
+                <label className="field">
+                  <span>Status · set by workflow</span>
+                  <input value={expense.status} readOnly />
+                </label>
+                {renderField("Payment method", "paymentMethod")}
+                {renderField("Receipt number", "receiptNumber")}
+                {renderField("Subtotal", "subtotal", "number")}
+                {renderField("Tax", "tax", "number")}
               </div>
+              <PolicyExceptions
+                expense={expense}
+                expenseId={savedId}
+                disabled={saving}
+                onEvidenceChange={(evidence) => setField("excomEvidence", evidence)}
+              />
+              <h4 className="form-group-title">Receipt</h4>
+              <ReceiptAssociation expense={expense} />
+              <details className="additional-fields">
+                <summary>Additional receipt & accounting details</summary>
+                <div className="form-grid">
+                  {renderField("Merchant address", "merchantAddress")}
+                  {renderField("Time", "expenseTime", "time")}
+                  {renderField("Service charge", "serviceCharge", "number")}
+                  {renderField("Tip / gratuity", "tip", "number")}
+                  {renderField("Discount", "discount", "number")}
+                  {renderField("Card last four", "cardLastFour")}
+                  {renderField("Cost center", "costCenter")}
+                  {renderField("Project", "project")}
+                  {renderField("Notes", "notes")}
+                </div>
+              </details>
+            </div>
+            <div className="panel form-panel">
+              <div className="form-title">
+                <h3>Line items</h3>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() =>
+                    setField("lineItems", [
+                      ...expense.lineItems,
+                      {
+                        id: createId(),
+                        description: "",
+                        quantity: 1,
+                        unitPrice: 0,
+                        total: 0,
+                      },
+                    ])
+                  }
+                >
+                  <Plus size={15} />
+                  Add item
+                </button>
+              </div>
+              <div className="line-items" id="expense-lineItems" tabIndex={-1}>
+                {expense.lineItems.map((lineItem, index) => (
+                  <div
+                    key={lineItem.id}
+                    className={`line-item ${[lineItem.confidence, ...Object.values(lineItem.fieldConfidence || {})].some((item) => item !== undefined && item < config.confidence) ? "low-confidence" : ""}`}
+                  >
+                    <label>
+                      Description
+                      {[
+                        lineItem.confidence,
+                        ...Object.values(lineItem.fieldConfidence || {}),
+                      ].some(
+                        (item) => item !== undefined && item < config.confidence,
+                      ) && (
+                        <small className="line-confidence">● Needs review</small>
+                      )}
+                      <input
+                        aria-label={`Item ${index + 1} description`}
+                        disabled={saving}
+                        value={lineItem.description}
+                        onChange={(event) =>
+                          setField(
+                            "lineItems",
+                            expense.lineItems.map((currentItem) =>
+                              currentItem.id === lineItem.id
+                                ? {
+                                    ...currentItem,
+                                    description: event.target.value,
+                                  }
+                                : currentItem,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      Qty
+                      <input
+                        type="number"
+                        min="0.01"
+                        step=".01"
+                        value={lineItem.quantity}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setField(
+                            "lineItems",
+                            expense.lineItems.map((currentItem) =>
+                              currentItem.id === lineItem.id
+                                ? {
+                                    ...currentItem,
+                                    quantity: Number(event.target.value),
+                                    total: Number(
+                                      (
+                                        Number(event.target.value) *
+                                        currentItem.unitPrice
+                                      ).toFixed(2),
+                                    ),
+                                  }
+                                : currentItem,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      Unit price
+                      <input
+                        type="number"
+                        min="0"
+                        step=".01"
+                        value={lineItem.unitPrice}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setField(
+                            "lineItems",
+                            expense.lineItems.map((currentItem) =>
+                              currentItem.id === lineItem.id
+                                ? {
+                                    ...currentItem,
+                                    unitPrice: Number(event.target.value),
+                                    total: Number(
+                                      (
+                                        Number(event.target.value) *
+                                        currentItem.quantity
+                                      ).toFixed(2),
+                                    ),
+                                  }
+                                : currentItem,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      Total price
+                      <input
+                        aria-label={`Item ${index + 1} total price`}
+                        disabled={saving}
+                        type="number"
+                        min="0"
+                        step=".01"
+                        value={lineItem.total}
+                        onChange={(event) =>
+                          setField(
+                            "lineItems",
+                            expense.lineItems.map((currentItem) =>
+                              currentItem.id === lineItem.id
+                                ? {
+                                    ...currentItem,
+                                    total: Number(event.target.value),
+                                  }
+                                : currentItem,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Remove item ${index + 1}`}
+                      onClick={() =>
+                        setField(
+                          "lineItems",
+                          expense.lineItems.filter(
+                            (currentItem) => currentItem.id !== lineItem.id,
+                          ),
+                        )
+                      }
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {expense.lineItems.length > 0 &&
+                Math.abs(
+                  expense.lineItems.reduce((sum, item) => sum + item.total, 0) -
+                    expense.subtotal,
+                ) > 0.02 && (
+                  <p className="warning-note">
+                    Line items do not match the subtotal. Check the receipt.
+                  </p>
+                )}
+            </div>
+            <ExpenseCheck
+              expense={expense}
+              all={expenses}
+              categories={categories}
+              editable
+            />
+            {duplicate && (
+              <section
+                className="panel form-panel"
+                id="expense-duplicate"
+                tabIndex={-1}
+              >
+                <h3>Compare possible duplicate</h3>
+                <div className="duplicate-comparison">
+                  <div>
+                    <small>Current expense</small>
+                    <h4>{expense.merchant}</h4>
+                    <strong>
+                      {formatCurrency(expense.amount, expense.currency)}
+                    </strong>
+                    <p>{expense.expenseDate}</p>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        return document
+                          .getElementById("expense-receipt")
+                          ?.scrollIntoView({
+                            behavior: "smooth",
+                          });
+                      }}
+                    >
+                      View current receipt
+                    </button>
+                  </div>
+                  <div>
+                    <small>
+                      {"Possible match · "}
+                      {duplicate.requestNumber}
+                    </small>
+                    <h4>{duplicate.merchant}</h4>
+                    <strong>
+                      {formatCurrency(duplicate.amount, duplicate.currency)}
+                    </strong>
+                    <p>{duplicate.expenseDate}</p>
+                    <a
+                      className="text-button"
+                      href={`#/requests/${duplicate.id}`}
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      View original expense & receipt
+                    </a>
+                  </div>
+                </div>
+                <p className="muted">
+                  Compare merchant, date, amount and receipt number before
+                  continuing. A matching record requires an explanation to submit
+                  separately.
+                </p>
+                <button
+                  className="button"
+                  type="button"
+                  onClick={() => setOverrideOpen(!overrideOpen)}
+                  aria-expanded={overrideOpen}
+                >
+                  Not a duplicate / explain
+                </button>
+                {overrideOpen && (
+                  <div className="duplicate-reason">
+                    <label className="field">
+                      Override reason
+                      <textarea
+                        value={overrideReason}
+                        onChange={(event) =>
+                          setOverrideReason(event.target.value)
+                        }
+                        placeholder="Why is this a separate expense?"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="button"
+                      disabled={overrideReason.trim().length < 3}
+                      onClick={() => {
+                        setField(
+                          "duplicateOverrideReason",
+                          overrideReason.trim(),
+                        );
+                        setOverrideOpen(false);
+                      }}
+                    >
+                      Record override
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+            {expense.duplicateOverrideReason && (
               <p className="muted">
-                Compare merchant, date, amount and receipt number before
-                continuing. A matching record requires an explanation to submit
-                separately.
+                {"Duplicate override recorded: "}
+                {expense.duplicateOverrideReason}
               </p>
+            )}
+            {expense.transactionMatch && (
+              <div className="panel form-panel">
+                <h3>Potential transaction match</h3>
+                <p>
+                  {expense.transactionMatch.merchant}
+                  {" ·"}{" "}
+                  {formatCurrency(
+                    expense.transactionMatch.amount,
+                    expense.currency,
+                  )}
+                  {" ·"} {expense.transactionMatch.date}
+                </p>
+                <small className="muted">
+                  Confidence:{" "}
+                  {Number.isFinite(expense.transactionMatch.confidence)
+                    ? `${Math.round(expense.transactionMatch.confidence * 100)}%`
+                    : "Not provided"}{" "}
+                  {"· "}
+                  {expense.transactionMatch.status}
+                </small>
+                {expense.transactionMatch.status === "Suggested" && (
+                  <div className="capture-options">
+                    <button
+                      type="button"
+                      className="button"
+                      onClick={() =>
+                        setField("transactionMatch", {
+                          ...expense.transactionMatch,
+                          status: "Matched",
+                        })
+                      }
+                    >
+                      Match
+                    </button>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() =>
+                        setField("transactionMatch", {
+                          ...expense.transactionMatch,
+                          status: "Dismissed",
+                        })
+                      }
+                    >
+                      Not this transaction
+                    </button>
+                  </div>
+                )}
+                <small className="muted">
+                  Your choice is saved with this expense.
+                </small>
+              </div>
+            )}
+            <footer className="review-footer">
               <button
                 className="button"
                 type="button"
-                onClick={() => setOverrideOpen(!overrideOpen)}
-                aria-expanded={overrideOpen}
+                disabled={saving}
+                onClick={() => void save(false)}
               >
-                Not a duplicate / explain
+                <Save size={16} />
+                Save Draft
               </button>
-              {overrideOpen && (
-                <div className="duplicate-reason">
-                  <label className="field">
-                    Override reason
-                    <textarea
-                      value={overrideReason}
-                      onChange={(event) =>
-                        setOverrideReason(event.target.value)
-                      }
-                      placeholder="Why is this a separate expense?"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="button"
-                    disabled={overrideReason.trim().length < 3}
-                    onClick={() => {
-                      setField(
-                        "duplicateOverrideReason",
-                        overrideReason.trim(),
-                      );
-                      setOverrideOpen(false);
-                    }}
-                  >
-                    Record override
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
-          {expense.duplicateOverrideReason && (
-            <p className="muted">
-              {"Duplicate override recorded: "}
-              {expense.duplicateOverrideReason}
-            </p>
-          )}
-          {expense.transactionMatch && (
-            <div className="panel form-panel">
-              <h3>Potential transaction match</h3>
-              <p>
-                {expense.transactionMatch.merchant}
-                {" ·"}{" "}
-                {formatCurrency(
-                  expense.transactionMatch.amount,
-                  expense.currency,
-                )}
-                {" ·"} {expense.transactionMatch.date}
-              </p>
-              <small className="muted">
-                Confidence:{" "}
-                {Number.isFinite(expense.transactionMatch.confidence)
-                  ? `${Math.round(expense.transactionMatch.confidence * 100)}%`
-                  : "Not provided"}{" "}
-                {"· "}
-                {expense.transactionMatch.status}
-              </small>
-              {expense.transactionMatch.status === "Suggested" && (
-                <div className="capture-options">
-                  <button
-                    type="button"
-                    className="button"
-                    onClick={() =>
-                      setField("transactionMatch", {
-                        ...expense.transactionMatch,
-                        status: "Matched",
-                      })
-                    }
-                  >
-                    Match
-                  </button>
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() =>
-                      setField("transactionMatch", {
-                        ...expense.transactionMatch,
-                        status: "Dismissed",
-                      })
-                    }
-                  >
-                    Not this transaction
-                  </button>
-                </div>
-              )}
-              <small className="muted">
-                Your choice is saved with this expense.
-              </small>
-            </div>
-          )}
-          <footer className="review-footer">
-            <button
-              className="button"
-              type="button"
-              disabled={saving}
-              onClick={() => void save(false)}
-            >
-              <Save size={16} />
-              Save Draft
-            </button>
-            <button className="button primary" disabled={saving}>
-              {saving ? <Spinner /> : <Send size={16} />}Submit Expense
-            </button>
-          </footer>
-        </form>
+              <button className="button primary" disabled={saving}>
+                {saving ? <Spinner /> : <Send size={16} />}Submit Expense
+              </button>
+            </footer>
+          </form>
+        </div>
+        {imageEditorOpen && (
+          <ImageEditModal
+            file={expense.receiptFiles[fileIndex]}
+            onClose={() => setImageEditorOpen(false)}
+            onSave={(event) => {
+              setField("receiptFiles", [...expense.receiptFiles, event]);
+              setFileIndex(expense.receiptFiles.length);
+            }}
+          />
+        )}
       </div>
-      {imageEditorOpen && (
-        <ImageEditModal
-          file={expense.receiptFiles[fileIndex]}
-          onClose={() => setImageEditorOpen(false)}
-          onSave={(event) => {
-            setField("receiptFiles", [...expense.receiptFiles, event]);
-            setFileIndex(expense.receiptFiles.length);
-          }}
-        />
-      )}
     </>
   );
 }

@@ -38,10 +38,6 @@ export function ExpensesPage({ upload = false, approvals = false }) {
     <>
       <header className="page-header">
         <div>
-          <div className="eyebrow">
-            WORKSPACE /{" "}
-            {approvals ? "REVIEW" : upload ? "RECEIPTS" : "EXPENSES"}
-          </div>
           <h1>
             {upload
               ? "Scan a receipt"
@@ -62,56 +58,58 @@ export function ExpensesPage({ upload = false, approvals = false }) {
           New expense
         </Link>
       </header>
-      {upload && (
-        <>
-          <div className="workflow-strip" aria-label="Receipt workflow">
-            <strong>1. Scan receipt</strong>
-            <span>2. Verify & check</span>
-            <span>3. Submit</span>
-          </div>
-          <ReceiptUploader />
-          {!loading && !error && visibleExpenses.length > 0 && (
-            <div className="operational-summary">
-              {["Draft", "Pending Approval", "Needs Correction"].map((item) => (
-                <Link
-                  key={item}
-                  to="/requests"
-                  state={{
-                    statusFilter: item,
-                  }}
-                >
-                  <strong>
-                    {
-                      visibleExpenses.filter(
-                        (expense) =>
-                          expense.employeeId === user.id &&
-                          expense.status === item,
-                      ).length
-                    }
-                  </strong>
-                  <span>
-                    {item === "Needs Correction" ? "Needs attention" : item}
-                  </span>
-                </Link>
-              ))}
+      <div className="workspace-surface">
+        {upload && (
+          <>
+            <div className="workflow-strip" aria-label="Receipt workflow">
+              <strong>1. Scan receipt</strong>
+              <span>2. Verify & check</span>
+              <span>3. Submit</span>
             </div>
-          )}
-        </>
-      )}
-      {loading ? (
-        <TableSkeleton />
-      ) : error ? (
-        <ErrorState message={error} retry={() => void refresh()} />
-      ) : (
-        <ExpenseTable
-          data={visibleExpenses}
-          compact={upload}
-          approvals={approvals}
-        />
-      )}
-      <div className="page-footnote">
-        <span>ReceiptFlow · Expense workspace</span>
-        <span>All amounts shown in their original currency</span>
+            <ReceiptUploader />
+            {!loading && !error && visibleExpenses.length > 0 && (
+              <div className="operational-summary">
+                {["Draft", "Pending Approval", "Needs Correction"].map((item) => (
+                  <Link
+                    key={item}
+                    to="/requests"
+                    state={{
+                      statusFilter: item,
+                    }}
+                  >
+                    <strong>
+                      {
+                        visibleExpenses.filter(
+                          (expense) =>
+                            expense.employeeId === user.id &&
+                            expense.status === item,
+                        ).length
+                      }
+                    </strong>
+                    <span>
+                      {item === "Needs Correction" ? "Needs attention" : item}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {loading ? (
+          <TableSkeleton />
+        ) : error ? (
+          <ErrorState message={error} retry={() => void refresh()} />
+        ) : (
+          <ExpenseTable
+            data={visibleExpenses}
+            compact={upload}
+            approvals={approvals}
+          />
+        )}
+        <div className="page-footnote">
+          <span>ReceiptFlow · Expense workspace</span>
+          <span>All amounts shown in their original currency</span>
+        </div>
       </div>
       {id && (
         <ExpenseDrawer

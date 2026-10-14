@@ -63,94 +63,95 @@ export function ProfilePage() {
     <>
       <header className="page-header">
         <div>
-          <div className="eyebrow">WORKSPACE / ACCOUNT</div>
           <h1>Profile</h1>
           <p>Your workspace account.</p>
         </div>
       </header>
-      <section className="panel profile-panel">
-        <h3>{user.name}</h3>
-        {user.email && <p>{user.email}</p>}
-        {verified ? (
-          <dl className="profile-identity">
-            <dt>Department</dt>
-            <dd className={user.department ? "" : "not-provided"}>
-              {user.department || NOT_PROVIDED}
-            </dd>
-            <dt>Job title</dt>
-            <dd className={user.position ? "" : "not-provided"}>
-              {user.position || NOT_PROVIDED}
-            </dd>
-            <dt>Role</dt>
-            <dd>{user.role.replaceAll("_", " ").toLowerCase()}</dd>
-            <dt>Signed in with</dt>
-            <dd>Microsoft</dd>
-          </dl>
-        ) : (
-          <p>
-            {authenticated
-              ? [
-                  user.department,
-                  user.role.replaceAll("_", " ").toLowerCase(),
-                  user.provider === "beta" && "temporary beta account",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
-              : "Account verification requires your organization’s sign-in service."}
-          </p>
-        )}
-        {error && <p role="alert">{error}</p>}
-        {authenticated ? (
-          <button
-            className="button"
-            disabled={busy}
-            onClick={() => void run(logout)}
-          >
-            Sign out
-          </button>
-        ) : microsoftSignIn ? (
-          <>
-            <button
-              className="button primary microsoft-sign-in"
-              disabled={busy}
-              onClick={() => void run(() => signInWithMicrosoft("/upload"))}
-            >
-              Sign in with Microsoft
-            </button>
-            {betaSignIn && (
-              <details className="beta-sign-in">
-                <summary>Use temporary beta sign-in</summary>
-                {betaForm}
-              </details>
-            )}
-          </>
-        ) : betaSignIn ? (
-          betaForm
-        ) : (
-          <button
-            className="button"
-            disabled={busy}
-            onClick={() => void run(async () => signIn())}
-          >
-            Sign in
-          </button>
-        )}
-        <button
-          className="button"
-          disabled={busy}
-          onClick={() => void run(refresh)}
-        >
-          Refresh account
-        </button>
-        <div className="profile-links">
-          <Link to="/settings">Settings & appearance</Link>
-          <Link to="/violations">Policy violations</Link>
-          <Link to="/requests">My requests</Link>
-          {(user.role === "FINANCE_ADMIN" || !authenticated) && (
-            <Link to="/categories">Category policies</Link>
+      <div className="workspace-surface">
+        <section className="panel profile-panel">
+          <h3>{user.name}</h3>
+          {user.email && <p>{user.email}</p>}
+          {verified ? (
+            <dl className="profile-identity">
+              <dt>Department</dt>
+              <dd className={user.department ? "" : "not-provided"}>
+                {user.department || NOT_PROVIDED}
+              </dd>
+              <dt>Job title</dt>
+              <dd className={user.position ? "" : "not-provided"}>
+                {user.position || NOT_PROVIDED}
+              </dd>
+              <dt>Role</dt>
+              <dd>{user.role.replaceAll("_", " ").toLowerCase()}</dd>
+              <dt>Signed in with</dt>
+              <dd>Microsoft</dd>
+            </dl>
+          ) : (
+            <p>
+              {authenticated
+                ? [
+                    user.department,
+                    user.role.replaceAll("_", " ").toLowerCase(),
+                    user.provider === "beta" && "temporary beta account",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : "Account verification requires your organization’s sign-in service."}
+            </p>
           )}
-        </div>
-      </section>
+          {error && <p role="alert">{error}</p>}
+          {authenticated ? (
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() => void run(logout)}
+            >
+              Sign out
+            </button>
+          ) : microsoftSignIn ? (
+            <>
+              <button
+                className="button primary microsoft-sign-in"
+                disabled={busy}
+                onClick={() => void run(() => signInWithMicrosoft("/upload"))}
+              >
+                Sign in with Microsoft
+              </button>
+              {betaSignIn && (
+                <details className="beta-sign-in">
+                  <summary>Use temporary beta sign-in</summary>
+                  {betaForm}
+                </details>
+              )}
+            </>
+          ) : betaSignIn ? (
+            betaForm
+          ) : (
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() => void run(async () => signIn())}
+            >
+              Sign in
+            </button>
+          )}
+          <button
+            className="button"
+            disabled={busy}
+            onClick={() => void run(refresh)}
+          >
+            Refresh account
+          </button>
+          <div className="profile-links">
+            <Link to="/settings">Settings & appearance</Link>
+            <Link to="/violations">Policy violations</Link>
+            <Link to="/requests">My requests</Link>
+            {(user.role === "FINANCE_ADMIN" || !authenticated) && (
+              <Link to="/categories">Category policies</Link>
+            )}
+          </div>
+        </section>
+      </div>
     </>
   );
 }

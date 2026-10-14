@@ -1,9 +1,8 @@
 /*
- * Phone layout (< 640px) for the receipt scanning flow.
- * Loaded after index.css. Everything except `.rail-short` is scoped to the
- * phone breakpoint, so tablet (640-1023px) and desktop styles are unchanged.
- * Colors use the existing theme tokens (light theme defines them; the
- * fallbacks are the dark theme values).
+ * Phone layout (< 640px).
+ * Loaded after index.css and layout.css. Everything except `.rail-short` is
+ * scoped to the phone breakpoint, so tablet (640-1023px) and desktop styles are
+ * unchanged. Colors come from the theme tokens (tokens.css).
  */
 
 /* Short labels exist only for the phone bottom navigation. */
@@ -20,17 +19,71 @@
   /* ---------- Single-column shell ---------- */
   .app-shell {
     display: block;
+    background: var(--theme-canvas);
   }
-  .main-shell,
-  .collapsed .main-shell {
+  .main-shell {
     width: 100%;
     margin-left: 0;
+    border-radius: 0;
   }
   main {
     min-height: 0;
-    padding: 16px max(var(--mobile-gutter), env(safe-area-inset-right))
+    padding: 4px max(var(--mobile-gutter), env(safe-area-inset-right))
       calc(var(--mobile-nav-height) + 28px + env(safe-area-inset-bottom))
       max(var(--mobile-gutter), env(safe-area-inset-left));
+  }
+  /* The gray workspace runs edge to edge down to the bottom bar. */
+  main:has(> .workspace-surface),
+  main:has(> .assistant-page) {
+    padding-bottom: 0;
+  }
+  .workspace-surface {
+    min-height: calc(var(--visible-height, 100dvh) - 150px);
+    margin: 0 calc(-1 * max(var(--mobile-gutter), env(safe-area-inset-left)));
+    padding: 18px max(var(--mobile-gutter), env(safe-area-inset-right))
+      calc(var(--mobile-nav-height) + 28px + env(safe-area-inset-bottom))
+      max(var(--mobile-gutter), env(safe-area-inset-left));
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  }
+  .main-shell > .offline {
+    margin: 0 var(--mobile-gutter) 10px;
+  }
+
+  /* ---------- Top bar: brand and account ---------- */
+  .topbar {
+    min-height: 60px;
+    padding: max(10px, env(safe-area-inset-top)) var(--mobile-gutter) 6px;
+  }
+  .topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-size: 17px;
+  }
+  .topbar-brand .brand-icon {
+    width: 34px;
+    height: 34px;
+    color: var(--on-primary);
+    background: var(--primary-strong);
+    border-radius: 11px;
+    box-shadow: none;
+  }
+  .breadcrumbs,
+  .topbar-user-text {
+    display: none;
+  }
+  .topbar-user {
+    padding: 2px;
+  }
+  .topbar .avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 13px;
+  }
+  .topbar-sign-in {
+    min-height: 40px;
+    padding: 8px 14px;
   }
 
   /* ---------- Bottom navigation (replaces the left rail on phones) ---------- */
@@ -47,13 +100,15 @@
     gap: 0;
     padding: 4px max(6px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom))
       max(6px, env(safe-area-inset-left));
+    color: var(--theme-muted);
+    background: var(--theme-panel);
     border-right: 0;
-    border-top: 1px solid var(--theme-border, #2a3030);
+    border-top: 1px solid var(--theme-border);
+    box-shadow: 0 -4px 18px rgb(16 24 32 / 0.06);
     overflow: visible;
     transition: none;
   }
-  .rail-brand,
-  .mobile-rail .rail-toggle,
+  .rail-head,
   .rail-backdrop {
     display: none !important;
   }
@@ -77,18 +132,26 @@
     min-height: 52px;
     margin: 0;
     padding: 5px 2px;
+    color: var(--theme-muted);
     border: 0;
-    border-radius: 10px;
+    border-radius: 14px;
     background: transparent;
     font-size: 11px;
-  }
-  .mobile-rail nav > a[href="#/upload"] {
-    border: 0;
+    font-weight: 500;
   }
   .mobile-rail nav > a.active,
   .mobile-rail .rail-profile.active {
-    color: var(--theme-teal-ink, #5fd6d0);
-    background: var(--theme-control, #212a29);
+    color: var(--theme-teal-ink);
+    background: var(--theme-teal-bg);
+    font-weight: 600;
+  }
+  .mobile-rail nav > a:hover,
+  .mobile-rail .rail-profile:hover {
+    background: var(--theme-control);
+  }
+  .mobile-rail nav > a.active::before,
+  .mobile-rail nav > a.active::after {
+    display: none;
   }
   .mobile-rail .rail-label,
   .mobile-rail.expanded .rail-label {
@@ -105,7 +168,9 @@
   .mobile-rail .rail-profile .avatar {
     width: 22px;
     height: 22px;
-    font-size: 9px;
+    font-size: 11px;
+    color: var(--on-primary);
+    background: var(--primary-strong);
   }
   /* Keyboard open: give the screen back to the form. */
   .keyboard-open .mobile-rail {
@@ -145,9 +210,6 @@
   .page-header > div {
     flex: 1 1 auto;
     min-width: 0;
-  }
-  .page-header .eyebrow {
-    display: none;
   }
   .page-header h1 {
     font-size: 22px;
@@ -272,9 +334,9 @@
     gap: 6px;
     min-height: 46px;
     padding: 0 8px;
-    border: 1px solid var(--theme-border, #2f3a3a);
+    border: 1px solid var(--theme-border);
     border-radius: 12px;
-    background: var(--theme-control, #212a29);
+    background: var(--theme-control);
     font-size: 13px;
     white-space: nowrap;
   }
@@ -293,9 +355,9 @@
   .queue-item {
     margin: 0;
     padding: 10px 10px 12px 12px;
-    border: 1px solid var(--theme-border, #2f3a3a);
+    border: 1px solid var(--theme-border);
     border-radius: 12px;
-    background: var(--theme-control, #1d2424);
+    background: var(--theme-control);
   }
   .queue-item > div:first-child {
     display: grid;
@@ -328,12 +390,12 @@
   .queue-item > div:first-child > :last-child {
     grid-area: remove;
     justify-self: center;
-    color: var(--theme-muted, #98abaa);
+    color: var(--theme-muted);
   }
   /* Retry / review: outlined so it reads as the item's main action; remove stays quiet. */
   .queue-item > div:first-child > button:nth-child(4) {
-    border: 1px solid var(--theme-border, #34504e);
-    color: var(--theme-teal-ink, #5fd6d0);
+    border: 1px solid var(--theme-border);
+    color: var(--theme-teal-ink);
   }
   .queue-item .icon-button {
     width: 44px;
@@ -346,23 +408,23 @@
     justify-self: start;
     padding: 2px 8px;
     border-radius: 999px;
-    background: var(--theme-teal-bg, #1f3b37);
-    color: var(--theme-teal-ink, #9fe3dc);
+    background: var(--theme-teal-bg);
+    color: var(--theme-teal-ink);
     font-size: 11px !important;
     font-weight: 600;
     line-height: 1.5;
   }
   .queue-item[data-status="Ready"] .queue-status {
-    background: var(--theme-success-bg, #1f4434);
-    color: var(--theme-success-ink, #a6ebc9);
+    background: var(--theme-success-bg);
+    color: var(--theme-success-ink);
   }
   .queue-item[data-status="Needs Review"] .queue-status {
-    background: var(--theme-warning-bg, #4a3d24);
-    color: var(--theme-warning-ink, #f9dca0);
+    background: var(--theme-warning-bg);
+    color: var(--theme-warning-ink);
   }
   .queue-item[data-status="Failed"] .queue-status {
-    background: var(--theme-danger-bg, #4d2a2e);
-    color: var(--theme-danger-ink, #ffc9c9);
+    background: var(--theme-danger-bg);
+    color: var(--theme-danger-ink);
   }
   .queue-item .progress {
     height: 4px;
@@ -396,8 +458,8 @@
   .queue-actions > .light-button:disabled {
     opacity: 1;
     background: transparent;
-    border: 1px dashed var(--theme-border, #3a4646);
-    color: var(--theme-muted, #8a9a9a);
+    border: 1px dashed var(--theme-border);
+    color: var(--theme-muted);
     cursor: not-allowed;
   }
   .queue-actions > .light-button:not(:disabled) {
@@ -411,7 +473,7 @@
     z-index: 20;
     bottom: calc(var(--mobile-nav-height) + 10px + env(safe-area-inset-bottom));
     padding: 8px 0 0;
-    background: var(--theme-panel, #1b2121);
+    background: var(--theme-panel);
   }
   .queue-actions .text-button {
     min-height: 44px;
@@ -432,7 +494,7 @@
   }
 
   /* ---------- Review screen ---------- */
-  .review-screen main {
+  .review-screen .workspace-surface {
     padding-bottom: calc(var(--mobile-nav-height) + 96px + env(safe-area-inset-bottom));
   }
   .review-footer {
@@ -526,7 +588,7 @@
   }
   .mobile-rail nav > a,
   .mobile-rail .rail-profile {
-    font-size: 10px;
+    font-size: 11px;
   }
   .page-header h1 {
     font-size: 20px;
@@ -558,7 +620,10 @@
     bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
     margin-left: calc(-1 * var(--mobile-gutter));
     margin-right: calc(-1 * var(--mobile-gutter));
-    padding: 10px var(--mobile-gutter) 12px;
+    padding: 12px var(--mobile-gutter);
+    border-width: 1px 0 0;
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+    box-shadow: 0 -6px 20px rgb(16 24 32 / 0.08);
   }
   .keyboard-open .assistant-composer {
     bottom: var(--keyboard-inset, 0px);
