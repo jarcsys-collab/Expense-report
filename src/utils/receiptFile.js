@@ -32,7 +32,7 @@ export function validateReceiptFile(file) {
     throw new Error(`${file.name}: file extension and MIME type do not match.`);
   }
   if (file.size > config.maxFileSize) {
-    throw new Error(`${file.name}: maximum size is 20 MB.`);
+    throw new Error(`${file.name} is larger than 10 MB. Retake the photo closer to the receipt, or compress the PDF.`);
   }
   if (!file.size) {
     throw new Error(`${file.name}: this file is empty.`);

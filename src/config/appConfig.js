@@ -36,7 +36,8 @@ export const config = {
   uploadField: "receipt",
   // OCR confidence below this marks a field as "Needs review".
   confidence: 0.8,
-  maxFileSize: 20 * 1024 * 1024,
+  // Must match the server's MAX_RECEIPT_BYTES (server/src/middleware/receiptUpload.js).
+  maxFileSize: 10 * 1024 * 1024,
   pollInterval: clamp(env.VITE_OCR_POLL_INTERVAL_MS, 2e3, 4e3, 2500),
   ocrTimeout: clamp(env.VITE_OCR_TIMEOUT_MS, 1e4, 6e5, 18e4),
   requestTimeout: Math.max(

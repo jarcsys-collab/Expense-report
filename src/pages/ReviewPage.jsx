@@ -8,6 +8,7 @@ import { ExpenseCheck } from "../components/expenses/ExpenseCheck";
 import { PolicyExceptions } from "../components/expenses/PolicyExceptions";
 import { ImageEditModal } from "../components/receipts/ImageEditModal";
 import { DateReviewNote } from "../components/receipts/DateReviewNote";
+import { OcrFieldStatus } from "../components/receipts/OcrFieldConfirmation";
 import { ReceiptAssociation } from "../components/receipts/ReceiptAssociation";
 import { ReceiptViewer } from "../components/receipts/ReceiptViewer";
 import { config } from "../config/appConfig";
@@ -23,6 +24,13 @@ import {
   validateExpense,
 } from "../utils/expenseRules";
 import { createId, formatCurrency } from "../utils/format";
+import { EDITABLE_STATUSES } from "../config/constants";
+import {
+  confidenceText,
+  confirmOcrFields,
+  fieldsNeedingOcrConfirmation,
+  ocrFieldState,
+} from "../utils/ocrConfirmation";
 import { validateReceiptFile } from "../utils/receiptFile";
 
 export function ReviewPage() {
@@ -105,15 +113,19 @@ export function ReviewPage() {
     );
   }
   if (submitted) {
+    // The server's status says what happened (routing may be switched off).
+    const savedOnly = submitted.status === "Pending Workflow Setup";
     return (
       <section className="submission-success panel" role="status">
         <Check size={38} />
-        <h1>Expense submitted</h1>
+        <h1>{savedOnly ? "Saved to My Requests" : "Expense submitted"}</h1>
         <p>
           {"Your "}
           {formatCurrency(submitted.amount, submitted.currency)}
           {" expense from"} {submitted.merchant}
-          {" was sent for approval."}
+          {savedOnly
+            ? " is saved in My Requests. Approval routing isn’t set up yet, so it hasn’t been sent to a manager or Finance. You can still open and correct it."
+            : " was sent for approval."}
         </p>
         <div className="capture-options">
           <button
@@ -129,10 +141,11 @@ export function ReviewPage() {
       </section>
     );
   }
+  // Without approval routing (server setting), the final step saves the checked
+  // request to My Requests instead of submitting it for approval.
+  const routingEnabled = Boolean(user.approvalWorkflowEnabled);
   if (!(
-    ["Draft", "Needs Review", "Needs Correction", "Rejected"].includes(
-      expense.status,
-    ) &&
+    EDITABLE_STATUSES.includes(expense.status) &&
     (expense.employeeId === user.id || user.role === "FINANCE_ADMIN")
   )) {
     return (
@@ -164,11 +177,13 @@ export function ReviewPage() {
     Boolean(expense.expenseDate) &&
     expense.dateReview.confirmedDate === expense.expenseDate;
   // The employee picks or confirms the receipt date; the confirmation is tied to that date.
+  // Choosing the date here also confirms it if OCR read it with low confidence.
   const confirmDate = (date) =>
     setExpense((current) => ({
       ...current,
       expenseDate: date,
       dateReview: { ...current.dateReview, confirmedDate: date },
+      ocrConfirmations: { ...(current.ocrConfirmations ?? {}), expenseDate: date },
     }));
   const renderField = (
     labelText,
@@ -177,10 +192,16 @@ export function ReviewPage() {
     required = false,
     { readOnly = false, emptyText = "" } = {},
   ) => {
+    // Key fields (merchant, date, total) read with low confidence need the
+    // employee's explicit confirmation or correction before submitting.
+    const ocrState = ocrFieldState(expense, field);
+    const lowConfidence = ocrState
+      ? ocrState.status === "needs_confirmation"
+      : expense.ocrConfidence[field] !== undefined && expense.ocrConfidence[field] < config.confidence;
     return (
       <label
         key={field}
-        className={`field ${expense.ocrConfidence[field] !== undefined && expense.ocrConfidence[field] < config.confidence ? "low-confidence" : ""}`}
+        className={`field ${lowConfidence ? "low-confidence" : ""}`}
       >
         <span>
           {labelText}
@@ -190,11 +211,20 @@ export function ReviewPage() {
             expense.originalOCR?.[field] === expense[field] && (
               <small className="detected-label">Auto-detected</small>
             )}
-          {expense.ocrConfidence[field] !== undefined &&
+          {!ocrState &&
+            expense.ocrConfidence[field] !== undefined &&
             expense.ocrConfidence[field] < config.confidence &&
             !(field === "expenseDate" && dateConfirmed) && (
               <small>● Needs review</small>
             )}
+          {ocrState && (
+            <OcrFieldStatus
+              state={ocrState}
+              currency={expense.currency}
+              disabled={saving}
+              onConfirm={() => setExpense((current) => confirmOcrFields(current, [field]))}
+            />
+          )}
         </span>
         <input
           aria-invalid={
@@ -248,6 +278,15 @@ export function ReviewPage() {
       return;
     }
     const errors = submit ? validateExpense(expense, categories) : [];
+    if (submit) {
+      for (const state of fieldsNeedingOcrConfirmation(expense)) {
+        errors.push(
+          state.reason === "not_read"
+            ? `Choose and confirm the ${state.label.toLowerCase()}: it was not found on the receipt.`
+            : `Confirm the ${state.label.toLowerCase()} against the receipt: it was read with ${confidenceText(state.ocrConfidence)}.`,
+        );
+      }
+    }
     if (submit && duplicate && !expense.duplicateOverrideReason) {
       errors.push(
         "Review the possible duplicate and provide an override reason before submitting.",
@@ -303,7 +342,11 @@ export function ReviewPage() {
         }
         return result;
       },
-      submit ? "Expense submitted for approval" : "Draft saved",
+      submit
+        ? routingEnabled
+          ? "Expense submitted for approval"
+          : "Saved to My Requests"
+        : "Draft saved",
     );
     setSaving(false);
     savingRef.current = false;
@@ -341,7 +384,7 @@ export function ReviewPage() {
         <div className="workflow-strip" aria-label="Receipt workflow">
           <span>1. Capture</span>
           <strong>2. Verify & check</strong>
-          <span>3. Submit</span>
+          <span>{routingEnabled ? "3. Submit" : "3. Save to My Requests"}</span>
         </div>
         <div className="review-health-bar">
           <span>
@@ -386,7 +429,7 @@ export function ReviewPage() {
               )}
               {expense.receiptFiles[fileIndex] ? (
                 <>
-                  <ReceiptViewer file={expense.receiptFiles[fileIndex]} />
+                  <ReceiptViewer file={expense.receiptFiles[fileIndex]} expenseId={expense.id} />
                   {expense.receiptFiles[fileIndex].mimeType.startsWith(
                     "image/",
                   ) && (
@@ -578,10 +621,19 @@ export function ReviewPage() {
                 <label className="field">
                   <span>
                     Currency *
-                    {expense.ocrConfidence.currency !== undefined &&
+                    {!ocrFieldState(expense, "currency") &&
+                      expense.ocrConfidence.currency !== undefined &&
                       expense.ocrConfidence.currency < config.confidence && (
                         <small>● Needs review</small>
                       )}
+                    {ocrFieldState(expense, "currency") && (
+                      <OcrFieldStatus
+                        state={ocrFieldState(expense, "currency")}
+                        currency={expense.currency}
+                        disabled={saving}
+                        onConfirm={() => setExpense((current) => confirmOcrFields(current, ["currency"]))}
+                      />
+                    )}
                   </span>
                   <select
                     id="expense-currency"
@@ -846,6 +898,16 @@ export function ReviewPage() {
                       View current receipt
                     </button>
                   </div>
+                  {duplicate.otherEmployee ? (
+                  <div>
+                    <small>Possible match</small>
+                    <h4>Another employee’s request</h4>
+                    <p>
+                      A similar expense was submitted by another employee. Its
+                      details are visible to Finance only.
+                    </p>
+                  </div>
+                  ) : (
                   <div>
                     <small>
                       {"Possible match · "}
@@ -865,6 +927,7 @@ export function ReviewPage() {
                       View original expense & receipt
                     </a>
                   </div>
+                  )}
                 </div>
                 <p className="muted">
                   Compare merchant, date, amount and receipt number before
@@ -979,7 +1042,8 @@ export function ReviewPage() {
                 Save Draft
               </button>
               <button className="button primary" disabled={saving}>
-                {saving ? <Spinner /> : <Send size={16} />}Submit Expense
+                {saving ? <Spinner /> : <Send size={16} />}
+                {routingEnabled ? "Submit Expense" : "Save to My Requests"}
               </button>
             </footer>
           </form>

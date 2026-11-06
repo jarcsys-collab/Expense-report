@@ -7,21 +7,36 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-reporter=spec \"test/**/*.test.js\""
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@google-cloud/documentai": "^10.2.0",
     "@veryfi/veryfi-sdk": "^1.5.2",
     "cors": "^2.8.6",
     "dotenv": "^18.0.5",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
+    "google-auth-library": "^11.3.3",
     "helmet": "^8.3.0",
     "jose": "^6.2.12",
     "mongoose": "^9.10.4",
-    "multer": "^2.4.0",
-    "zod": "^4.6.5"
+    "multer": "^2.5.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.3.0"
+  },
+  "overrides": {
+    "qs": "6.16.1",
+    "ip-address": "10.7.4"
+  },
+  "config": {
+    "mongodbMemoryServer": {
+      "disablePostinstall": "1"
+    }
   }
 }

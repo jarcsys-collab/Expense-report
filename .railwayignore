@@ -1,0 +1,7 @@
+# Never upload local secrets in a build or `railway up` snapshot.
+secrets/
+server/secrets/
+.env
+server/.env
+*-ocr-*.json
+*service-account*.json

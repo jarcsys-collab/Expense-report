@@ -1,6 +1,7 @@
 import { env } from "./config/env.js";
 import { connectDatabase, disconnectDatabase, isDatabaseConfigured } from "./config/database.js";
 import { createApp } from "./app.js";
+import { startReceiptCleanupSchedule } from "./services/receiptCleanupSchedule.js";
 
 const app = createApp();
 const server = app.listen(env.port, () => {
@@ -17,7 +18,10 @@ const server = app.listen(env.port, () => {
 // The first connection is retried; later drops are handled by the driver.
 let retryTimer;
 async function connectWithRetry() {
-  if (await connectDatabase()) return;
+  if (await connectDatabase()) {
+    startReceiptCleanupSchedule();
+    return;
+  }
   if (isDatabaseConfigured()) retryTimer = setTimeout(connectWithRetry, 15_000);
 }
 connectWithRetry();

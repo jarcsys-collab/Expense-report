@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { databaseStatus } from "../config/database.js";
-import { ocrStatus } from "../services/veryfiService.js";
+import { activeOcrProvider, ocrStatus } from "../services/ocrProvider.js";
 
 export const healthRouter = Router();
 
@@ -11,6 +11,7 @@ healthRouter.get("/", (req, res) => {
     service: "receiptflow-api",
     database: databaseStatus(),
     ocr: ocrStatus(),
+    ocrProvider: activeOcrProvider(),
     time: new Date().toISOString(),
   });
 });

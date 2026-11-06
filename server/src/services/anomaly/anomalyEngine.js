@@ -20,13 +20,16 @@ export const VIOLATION_PREFIX = "anomaly-";
  *        extraction: right after OCR, before the employee confirms the summary
  *        submission: after the employee confirms (save/submit)
  * @param {object|null} [input.ocr]  ocrMeta from the linked receipt job
+ * @param {object|null} [input.ocrResult]  the scan's extracted values (server copy), e.g. the original total
  * @param {boolean} [input.receiptUploaded]
  * @param {string} [input.excludeId]  the expense's own id (for duplicate checks)
+ * @param {string} [input.ownerId]  whose expense this is (default expense.employeeId), to tell
+ *        the employee's own earlier requests from other employees' in duplicate results
  */
-export async function runAnomalyCheck({ expense, stage, ocr = null, receiptUploaded = false, excludeId }) {
+export async function runAnomalyCheck({ expense, stage, ocr = null, ocrResult = null, receiptUploaded = false, excludeId, ownerId }) {
   const [categories, duplicates, policy] = await Promise.all([
     Category.find().lean().catch(() => []),
-    findPossibleDuplicates(expense, { excludeId }),
+    findPossibleDuplicates(expense, { excludeId, ownerId: ownerId ?? expense.employeeId }),
     // Company expense policy (policy/expensePolicy.js), used by the policy rules.
     evaluateExpensePolicy({ expense, stage, excludeId }),
   ]);
@@ -34,6 +37,7 @@ export async function runAnomalyCheck({ expense, stage, ocr = null, receiptUploa
     expense,
     stage,
     ocr,
+    ocrResult,
     receiptUploaded,
     categories,
     duplicates,

@@ -54,6 +54,15 @@ export function errorHandler(err, req, res, next) {
   } else if (["MongoNetworkError", "MongoServerSelectionError", "MongoNotConnectedError"].includes(err?.name)) {
     status = 503;
     body = { error: "DATABASE_UNAVAILABLE", message: "The database is unavailable. Please retry shortly." };
+  } else if (Number.isInteger(err?.status) && err.status >= 400 && err.status < 500 && err.expose === true) {
+    // Other client errors raised while reading the request (body-parser/http-errors:
+    // a damaged compressed body, unsupported encoding or charset, aborted upload).
+    // A fixed message: the parser's own text is not echoed.
+    status = err.status;
+    body =
+      status === 415
+        ? { error: "UNSUPPORTED_MEDIA_TYPE", message: "The request body's encoding is not supported." }
+        : { error: "INVALID_REQUEST_BODY", message: "The request body could not be read." };
   }
 
   if (status >= 500 && !(err instanceof HttpError)) {

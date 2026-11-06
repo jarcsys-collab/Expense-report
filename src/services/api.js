@@ -16,6 +16,7 @@ const methods = {
   updateExpense: expenses.updateExpense,
   deleteExpense: expenses.deleteExpense,
   submitExpense: expenses.submitExpense,
+  getReceiptFile: expenses.getReceiptFile,
   approveExpense: expenses.approveExpense,
   rejectExpense: expenses.rejectExpense,
   requestChanges: expenses.requestChanges,

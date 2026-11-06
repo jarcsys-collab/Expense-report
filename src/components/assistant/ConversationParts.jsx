@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { config } from "../../config/appConfig";
 import { formatDate } from "../../utils/format";
+import { ocrFieldState } from "../../utils/ocrConfirmation";
 import { Spinner } from "../common/Spinner";
 import { ReceiptAssociation } from "../receipts/ReceiptAssociation";
 import {
@@ -192,7 +193,19 @@ function detail(expense, field, value, missingText = "Not found · I'll ask you"
   if (value === undefined || value === null || value === "") {
     return <span className="chat-missing">{missingText}</span>;
   }
-  return lowConfidence(expense, field) ? (
+  // Key fields OCR read with low confidence: confirmation status.
+  const ocrState = ocrFieldState(expense, field);
+  if (ocrState && ocrState.status !== "needs_confirmation") {
+    return (
+      <>
+        {value}{" "}
+        <span className="chat-confirmed">
+          <CircleCheck size={13} aria-hidden="true" /> {ocrState.status === "corrected" ? "Corrected" : "Confirmed"}
+        </span>
+      </>
+    );
+  }
+  return lowConfidence(expense, field) || ocrState ? (
     <>
       {value}{" "}
       <span className="chat-check">
@@ -314,7 +327,10 @@ export function FindingCard({ finding, policy, report, expense }) {
         <p>{finding.message}</p>
         {matches.length > 0 && (
           <ul className="finding-matches">
-            {matches.map((match) => (
+            {matches.map((match) =>
+              match.otherEmployee ? (
+                <li key={match.id}>A similar request from another employee (details visible to Finance only)</li>
+              ) : (
               <li key={match.id}>
                 <a href={`#/requests/${match.id}`} target="_blank" rel="noopener">
                   {match.requestNumber || "Earlier expense"}
@@ -323,7 +339,8 @@ export function FindingCard({ finding, policy, report, expense }) {
                   .filter(Boolean)
                   .map((part) => ` · ${part}`)}
               </li>
-            ))}
+              ),
+            )}
           </ul>
         )}
         <Rows rows={[["Status", reviewStatus(finding)]]} />
@@ -461,10 +478,12 @@ const STATUS_NOTES = {
   Submitted: "Your expense was sent directly to Finance.",
   "Needs Correction": "Your expense needs a correction. Open the request for details.",
   Rejected: "Your expense was rejected. Open the request for details.",
+  "Pending Workflow Setup":
+    "It’s saved in My Requests. Approval routing isn’t set up yet, so it hasn’t been sent to a manager or Finance. You can still open and correct it.",
 };
 
 function StatusPill({ status }) {
-  const tone = { "Pending Approval": "pending", Approved: "success", Reimbursed: "success", Rejected: "danger", "Needs Correction": "warning" }[status] ?? "";
+  const tone = { "Pending Approval": "pending", "Pending Workflow Setup": "pending", Approved: "success", Reimbursed: "success", Rejected: "danger", "Needs Correction": "warning" }[status] ?? "";
   return (
     <span className={`badge ${tone}`}>
       <i />
@@ -479,7 +498,7 @@ export function SubmittedMessage({ expense }) {
       <div className="chat-success">
         <CircleCheck size={20} aria-hidden="true" />
         <div>
-          <h3>Expense submitted!</h3>
+          <h3>{expense.status === "Pending Workflow Setup" ? "Saved to My Requests" : "Expense submitted!"}</h3>
           {STATUS_NOTES[expense.status] && <p>{STATUS_NOTES[expense.status]}</p>}
         </div>
       </div>

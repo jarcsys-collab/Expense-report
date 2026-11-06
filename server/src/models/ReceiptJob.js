@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { RECEIPT_JOB_STATUSES } from "./constants.js";
 import { toJSONOptions } from "./toJSON.js";
 
-// One OCR run for an uploaded receipt. Filled in once Veryfi is connected.
+// One OCR run for an uploaded receipt.
 const receiptJobSchema = new mongoose.Schema(
   {
     status: { type: String, enum: RECEIPT_JOB_STATUSES, default: "queued", index: true },
@@ -11,6 +11,17 @@ const receiptJobSchema = new mongoose.Schema(
     size: { type: Number, min: 0 },
     // Optional link to the expense created from this receipt.
     expenseId: { type: mongoose.Schema.Types.ObjectId, ref: "Expense" },
+    // OCR provider that read it (veryfi | google_document_ai); absent on older jobs.
+    ocrProvider: { type: String, maxlength: 50 },
+    // SHA-256 of the uploaded file, so an identical re-upload is answered from the
+    // existing job instead of a second OCR request. Absent on older jobs.
+    fileSha256: { type: String, maxlength: 64 },
+    // The original file in GridFS (bucket receiptFiles); absent on older jobs.
+    fileId: { type: mongoose.Schema.Types.ObjectId },
+    // Abandoned-upload cleanup (services/receiptCleanup.js): when the stored file
+    // was removed, and a short-lived claim so two runs never act on one scan.
+    fileDeletedAt: { type: Date },
+    cleanupClaimedAt: { type: Date },
     // Provider job/document id (e.g. Veryfi document id).
     providerJobId: { type: String, maxlength: 200 },
     errorMessage: { type: String, maxlength: 1000 },
@@ -27,5 +38,7 @@ const receiptJobSchema = new mongoose.Schema(
   },
   { timestamps: true, collection: "receiptJobs", toJSON: toJSONOptions },
 );
+// Finds an identical recent upload (receipts route). Additive; existing jobs are unchanged.
+receiptJobSchema.index({ uploadedBy: 1, fileSha256: 1, createdAt: -1 });
 
 export const ReceiptJob = mongoose.model("ReceiptJob", receiptJobSchema);

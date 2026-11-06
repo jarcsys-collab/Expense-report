@@ -7,3 +7,8 @@ dist/
 
 # Backend secrets
 server/.env
+
+# Google Cloud service-account keys (never commit; production uses the sealed Railway variable)
+/server/secrets/
+*-ocr-*.json
+*service-account*.json

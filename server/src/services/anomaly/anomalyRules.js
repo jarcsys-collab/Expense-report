@@ -11,6 +11,7 @@
 //   not_evaluated  the data the rule needs is not connected yet (requiredSource says which)
 // Rules never pass when their data is missing.
 
+import { isMaterialTotalCorrection, OCR_CONFIDENCE_THRESHOLD, sameValue } from "../ocrFieldReview.js";
 import { describeIsoDate } from "../receiptDate.js";
 
 export const SOURCE_DOCUMENT = "Anomalies_reference.pdf";
@@ -40,7 +41,8 @@ export const REQUIRED_DETAILS = [
 // Details that can come from the receipt itself, checked right after OCR.
 const RECEIPT_DETAILS = ["expenseDate", "amount"];
 
-const LOW_CONFIDENCE = 0.8;
+// OCR confidence below this needs the employee's confirmation (ocrFieldReview.js).
+export const LOW_CONFIDENCE = OCR_CONFIDENCE_THRESHOLD;
 const money = (n, currency) => `${currency || ""} ${Number(n).toFixed(2)}`.trim();
 const near = (a, b) => Math.abs(a - b) <= Math.max(0.02, Math.abs(b) * 0.005);
 const filled = (v) => (typeof v === "number" ? Number.isFinite(v) && v > 0 : typeof v === "string" ? v.trim() !== "" : v != null);
@@ -141,21 +143,124 @@ export const anomalyRules = [
     severity: "warning",
     // Uses OCR results only. Whether a receipt is the original cannot be
     // determined automatically, so this never claims a receipt is fake.
-    evaluate: ({ ocr }) => {
+    evaluate: ({ ocr, expense }) => {
       if (!ocr) return result("not_evaluated", "No OCR scan is linked to this expense (manual entry), so receipt clarity was not checked.");
+      // A low-confidence field the employee explicitly confirmed or corrected (a
+      // server-maintained review whose value is still the expense's value) is no
+      // longer an unresolved OCR uncertainty. Unread fields and provider warnings
+      // still need review; a corrected total is checked by ocr_total_corrected.
+      const resolved = new Map(
+        (expense?.ocrFieldReviews ?? [])
+          .filter((r) => (r.status === "confirmed" || r.status === "corrected") && r.confirmedAt && sameValue(r.field, r.confirmedValue, expense?.[r.field]))
+          .map((r) => [r.field, r]),
+      );
       const reasons = [];
+      const confirmed = [];
       for (const [field, label] of [["merchant", "merchant"], ["amount", "total"], ["expenseDate", "date"]]) {
         if (!ocr.fieldsExtracted?.includes(field)) reasons.push(`the ${label} could not be read`);
         else if (typeof ocr.confidence?.[field] === "number" && ocr.confidence[field] < LOW_CONFIDENCE) {
-          reasons.push(`the ${label} was read with low confidence (${Math.round(ocr.confidence[field] * 100)}%)`);
+          const pct = Math.round(ocr.confidence[field] * 100);
+          const review = resolved.get(field);
+          if (review) confirmed.push(`${label} (read with ${pct}% confidence, ${review.status} by ${review.confirmedBy?.name || "the employee"})`);
+          else reasons.push(`the ${label} was read with low confidence (${pct}%)`);
         }
       }
       if (ocr.isDocument === false) reasons.push("Veryfi did not recognize the file as a receipt or invoice");
       if (ocr.fraudColor === "red") reasons.push("Veryfi reported a high fraud-risk signal for this document");
       const note = "Originality is not verified automatically.";
+      const confirmedNote = confirmed.length ? ` Confirmed by the employee: ${confirmed.join("; ")}.` : "";
+      const details = confirmed.length ? { reasons, confirmedFields: [...resolved.keys()] } : { reasons };
       return reasons.length
-        ? result("needs_review", `The receipt may be unclear: ${reasons.join("; ")}. Ask the employee to re-upload a clearer copy if needed. ${note}`, { reasons })
-        : result("passed", `Key receipt fields were read clearly. ${note}`);
+        ? result("needs_review", `The receipt may be unclear: ${reasons.join("; ")}. Ask the employee to re-upload a clearer copy if needed.${confirmedNote} ${note}`, details)
+        : result("passed", `Key receipt fields were read clearly${confirmed.length ? " or confirmed by the employee" : ""}.${confirmedNote} ${note}`, confirmed.length ? details : undefined);
+    },
+  },
+  {
+    // The employee changed the total the receipt scan read. Original and
+    // submitted totals are kept; a change beyond the configured tolerance
+    // (default: any change) needs review. Confirmation never overrides this.
+    id: "ocr_total_corrected",
+    name: "Total changed from the scanned receipt",
+    pdf: {
+      anomaly: "Submitted OR/receipt is not original or is unclear/invalid",
+      solution: "ai chatbot - request to reupload",
+    },
+    dependency: DEPENDENCIES.OCR_RECEIPT,
+    requiredSource: "ocr",
+    severity: "warning",
+    evaluate: ({ expense, ocrResult }) => {
+      if (!ocrResult) return result("not_evaluated", "No OCR scan is linked to this expense (manual entry), so there is no scanned total to compare.");
+      const scanned = typeof ocrResult.amount === "number" && Number.isFinite(ocrResult.amount) ? ocrResult.amount : null;
+      if (scanned === null) return result("not_evaluated", "The receipt scan did not read a total, so a changed total cannot be detected.");
+      const submitted = Number(expense?.amount);
+      if (!Number.isFinite(submitted)) return result("not_evaluated", "The expense has no total yet.");
+      const difference = Math.round((submitted - scanned) * 100) / 100;
+      const details = { scannedTotal: scanned, submittedTotal: submitted, difference };
+      if (difference === 0) return result("passed", "The total matches the scanned receipt.");
+      const change = `The total was changed from ${money(scanned, expense.currency)} (scanned) to ${money(submitted, expense.currency)} (difference ${money(difference, expense.currency)}).`;
+      return isMaterialTotalCorrection(scanned, submitted)
+        ? result("needs_review", `${change} A reviewer should compare it with the receipt.`, details)
+        : result("passed", `${change} This is within the tolerance set by Finance.`, details);
+    },
+  },
+  {
+    // The employee changed the currency the receipt scan read. Both values are
+    // kept; any change needs review. A scan without a currency is not an
+    // anomaly: the employee provides it (ocrFieldReview.js).
+    id: "ocr_currency_changed",
+    name: "Currency changed from the scanned receipt",
+    pdf: {
+      anomaly: "Submitted OR/receipt is not original or is unclear/invalid",
+      solution: "ai chatbot - request to reupload",
+    },
+    dependency: DEPENDENCIES.OCR_RECEIPT,
+    requiredSource: "ocr",
+    severity: "warning",
+    evaluate: ({ expense, ocrResult }) => {
+      if (!ocrResult) return result("not_evaluated", "No OCR scan is linked to this expense (manual entry), so there is no scanned currency to compare.");
+      const scanned = typeof ocrResult.currency === "string" && /^[A-Z]{3}$/.test(ocrResult.currency) ? ocrResult.currency : null;
+      if (!scanned) return result("not_evaluated", "The receipt scan did not read a currency; the employee provided it.");
+      const submitted = String(expense?.currency ?? "").toUpperCase();
+      if (submitted === scanned) return result("passed", "The currency matches the scanned receipt.");
+      return result(
+        "needs_review",
+        `The currency was changed from ${scanned} (scanned) to ${submitted || "none"}. A reviewer should compare it with the receipt.`,
+        { scannedCurrency: scanned, submittedCurrency: submitted || null },
+      );
+    },
+  },
+  {
+    // Document screening signals supplied by the OCR provider itself (Veryfi:
+    // fraud-risk color, duplicate-document flag, receipt/not-a-receipt check).
+    // A provider that cannot supply them (Google Document AI) makes this check
+    // "not evaluated" with the missing signals listed; it is never reported as passed.
+    id: "ocr_provider_screening",
+    name: "OCR provider document screening",
+    pdf: {
+      anomaly: "Submitted OR/receipt is not original or is unclear/invalid",
+      solution: "ai chatbot - request to reupload",
+    },
+    dependency: DEPENDENCIES.OCR_RECEIPT,
+    requiredSource: "ocr_provider_signals",
+    severity: "warning",
+    evaluate: ({ ocr }) => {
+      if (!ocr) return result("not_evaluated", "No OCR scan is linked to this expense (manual entry), so provider document screening did not run.");
+      const unavailable = Array.isArray(ocr.unavailableSignals) ? ocr.unavailableSignals : [];
+      if (unavailable.length) {
+        const labels = {
+          provider_fraud_signal: "fraud-risk screening",
+          provider_duplicate_signal: "the provider's duplicate-document check",
+          provider_document_check: "the receipt/not-a-receipt check",
+        };
+        const names = unavailable.map((id) => labels[id] ?? id).join(", ");
+        return result(
+          "not_evaluated",
+          `Not available with the current OCR provider (${ocr.provider ?? "unknown"}): ${names}. These were not checked; ReceiptFlow's own duplicate and policy checks still ran.`,
+          { unavailableSignals: unavailable, provider: ocr.provider },
+        );
+      }
+      // Veryfi: its signals are applied in the receipt-clarity and duplicate checks.
+      return result("passed", "The OCR provider's document screening signals were available and are applied in the receipt and duplicate checks.");
     },
   },
   {
@@ -170,12 +275,18 @@ export const anomalyRules = [
       if (duplicates === null) return result("not_evaluated", "Previous submissions could not be checked (database unavailable).");
       const veryfiDuplicate = ocr?.isDuplicate === true;
       if (!duplicates.length && !veryfiDuplicate) return result("passed", "No similar previous expense was found.");
-      const refs = duplicates.map((d) => d.requestNumber || d.id).join(", ");
+      // Only the employee's own earlier requests are named; another employee's
+      // request is never identified here (Finance sees it in possibleDuplicates).
+      const own = duplicates.filter((d) => d.sameEmployee === true);
+      const others = duplicates.length - own.length;
       const parts = [];
-      if (duplicates.length) parts.push(`Similar previous expense${duplicates.length > 1 ? "s" : ""} found: ${refs}.`);
+      if (own.length) {
+        parts.push(`Similar previous expense${own.length > 1 ? "s" : ""} of yours found: ${own.map((d) => d.requestNumber || d.id).join(", ")}.`);
+      }
+      if (others) parts.push("A similar expense was submitted by another employee. Finance will review it.");
       if (veryfiDuplicate) parts.push("Veryfi reports that this document was submitted before.");
       if (expense.duplicateOverrideReason) parts.push(`Employee explanation: "${expense.duplicateOverrideReason}".`);
-      return result("flagged", parts.join(" "), { matches: duplicates.map((d) => d.id), veryfiDuplicate });
+      return result("flagged", parts.join(" "), { matches: own.map((d) => d.id), otherEmployeeMatches: others, veryfiDuplicate });
     },
   },
   {

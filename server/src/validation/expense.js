@@ -80,12 +80,26 @@ const fields = {
   employeeName: text(200),
   position: text(200),
   department: text(200),
-  assignedApproverId: text(100),
+  // assignedApproverId is NOT accepted from the browser: it grants an approver
+  // access to the request (services/expenseAccess.js). It will be set by the
+  // server when approval routing is built; stored values stay as they are.
   receiptId: text(100),
   // Links the expense to the OCR job it came from (ReceiptJob id).
   receiptJobId: z.union([z.literal(""), objectId]),
   // Only the employee's confirmation is accepted; the rest of the date review comes from the receipt scan.
   dateReview: z.object({ confirmedDate: z.union([isoDay, z.null()]).optional() }),
+  // The employee confirms the CURRENT value of a low-confidence OCR field. Only
+  // the value is accepted: who, when and the original OCR reading come from the
+  // server (services/ocrFieldReview.js). Server-maintained ocrFieldReviews are
+  // never accepted from the browser (unknown keys are dropped).
+  ocrConfirmations: z
+    .object({
+      merchant: text(200).optional(),
+      expenseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD").optional(),
+      amount: z.number().finite().min(0).max(1e12).optional(),
+      currency: z.string().regex(/^[A-Z]{3}$/, "must be a 3-letter currency code").optional(),
+    })
+    .strict(),
   receiptFiles: z.array(receiptFile).max(20),
   lineItems: z.array(lineItem).max(200),
   ocrStatus: text(30),

@@ -9,10 +9,17 @@ export const EXPENSE_STATUSES = [
   "Rejected",
   "Needs Correction",
   "Reimbursed",
+  // Temporary: a complete, checked request saved to My Requests while approval
+  // routing is switched off (APPROVAL_WORKFLOW_ENABLED=false). Never routed
+  // automatically; the employee submits it explicitly once routing is enabled.
+  "Pending Workflow Setup",
 ];
 
+// The temporary saved status (see above).
+export const SAVED_PENDING_WORKFLOW_STATUS = "Pending Workflow Setup";
+
 // Statuses the employee may still edit or delete (matches the frontend's canEdit rule).
-export const EDITABLE_STATUSES = ["Draft", "Needs Review", "Needs Correction", "Rejected"];
+export const EDITABLE_STATUSES = ["Draft", "Needs Review", "Needs Correction", "Rejected", SAVED_PENDING_WORKFLOW_STATUS];
 
 // Statuses a client may choose when creating an expense. Every other status is
 // reached through workflow actions (submit/approve/reject) on the server.

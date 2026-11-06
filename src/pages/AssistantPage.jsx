@@ -33,6 +33,7 @@ import { isAbortError } from "../services/httpClient";
 import { scanReceipt } from "../services/receiptService";
 import { createId, formatDate, nowIso, sanitizeFileName } from "../utils/format";
 import { validateReceiptFile } from "../utils/receiptFile";
+import { confidenceText, describeOcrValue, fieldsNeedingOcrConfirmation } from "../utils/ocrConfirmation";
 
 const RECEIPT_TYPES = ".jpg,.jpeg,.png,.webp,.heic,.heif,.pdf";
 const CURRENCIES = ["PHP", "USD", "EUR", "GBP", "SGD", "JPY", "AUD", "CAD"];
@@ -274,6 +275,8 @@ export function AssistantPage() {
         dispatch({ type: "SUBMIT_INCOMPLETE", details: error.details });
       } else if (error.code === "DATE_NOT_CONFIRMED" && state.expense.dateReview?.ambiguous) {
         dispatch({ type: "DATE_REJECTED" });
+      } else if (error.code === "OCR_FIELDS_NOT_CONFIRMED") {
+        dispatch({ type: "OCR_FIELDS_REJECTED", fields: (error.details ?? []).map((detail) => detail.path) });
       } else {
         dispatch({ type: "FAILED", kind: "submit", message: error.message, ...errorKindOf(error), retry: label });
       }
@@ -375,6 +378,28 @@ export function AssistantPage() {
             <p>
               The receipt shows <strong>{message.review.raw}</strong>. Please confirm the intended date.
             </p>
+          );
+        case "ocrConfirm":
+          return (
+            <>
+              <p>
+                {message.fields.length > 1 ? "These details were" : "This detail was"} hard to read. Please check{" "}
+                {message.fields.length > 1 ? "them" : "it"} against your receipt:
+              </p>
+              <ul className="ocr-confirm-list">
+                {message.fields.map((field) => (
+                  <li key={field.field}>
+                    <strong>{field.label}:</strong>{" "}
+                    {field.field === "expenseDate" && field.value
+                      ? formatDate(field.value)
+                      : describeOcrValue(field.field, field.value, message.currency)}{" "}
+                    <span className="chat-check">
+                      {field.reason === "not_read" ? "not found on the receipt" : `read with ${confidenceText(field.ocrConfidence)}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
           );
         case "question":
           return <p>{message.text}</p>;
@@ -495,6 +520,7 @@ function Composer(props) {
 const DRAFT_STEPS = [
   STEPS.REVIEW_EXTRACTED_DATA,
   STEPS.CONFIRM_DATE,
+  STEPS.CONFIRM_OCR_FIELDS,
   STEPS.COLLECT_MISSING_INFORMATION,
   STEPS.SHOW_POLICY_RESULTS,
   STEPS.REVIEW_SUMMARY,
@@ -577,6 +603,10 @@ function composerContent(props) {
           };
     case STEPS.CONFIRM_DATE:
       return { node: <DateChoice {...props} /> };
+    case STEPS.CONFIRM_OCR_FIELDS:
+      return state.editing
+        ? { large: true, node: <EditDetails {...props} /> }
+        : { node: <OcrConfirmChoice {...props} /> };
     case STEPS.COLLECT_MISSING_INFORMATION:
       return { node: <Answer key={`${state.question}-${state.messages.length}`} {...props} /> };
     case STEPS.SHOW_POLICY_RESULTS:
@@ -648,7 +678,7 @@ function ReceiptActions({ onTakePhoto, onChooseFile, onDropFiles, disabled }) {
         </button>
       </div>
       <small className="composer-hint">
-        JPG, PNG, WEBP, HEIC or PDF · up to 20 MB ·{" "}
+        JPG, PNG, WEBP, HEIC or PDF · up to 10 MB ·{" "}
         <Link to="/upload/batch">Scan several receipts or a long receipt</Link>
       </small>
     </div>
@@ -676,6 +706,32 @@ function DateChoice(props) {
           {formatDate(date)} <small>({how})</small>
         </button>
       ))}
+      <SaveDraftButton {...props} />
+    </div>
+  );
+}
+
+// Explicit confirmation of the details OCR read with low confidence, or edit them.
+function OcrConfirmChoice(props) {
+  const { state, dispatch } = props;
+  const pending = fieldsNeedingOcrConfirmation(state.expense);
+  return (
+    <div className="composer-actions" role="group" aria-label="Confirm hard-to-read receipt details">
+      <button
+        className="button primary"
+        onClick={() =>
+          dispatch({
+            type: "OCR_FIELDS_CONFIRMED",
+            fields: pending.map((field) => field.field),
+            label: pending.length > 1 ? "These match my receipt." : "This matches my receipt.",
+          })
+        }
+      >
+        {pending.length > 1 ? "Yes, these match the receipt" : "Yes, this matches the receipt"}
+      </button>
+      <button className="button" onClick={() => dispatch({ type: "EDIT_MODE", editing: true })}>
+        Edit details
+      </button>
       <SaveDraftButton {...props} />
     </div>
   );
@@ -913,10 +969,11 @@ function ResultActions(props) {
 }
 
 function SummaryActions(props) {
-  const { state, dispatch, onSubmit, onFullDetails } = props;
+  const { state, dispatch, onSubmit, onFullDetails, user } = props;
   const findings = reportFindings(state.report);
   const toManager = state.report?.route === "manager_approval";
-  const label = toManager ? "Submit for Approval" : "Submit";
+  // Approval routing is a server setting; without it the request is only saved.
+  const label = !user?.approvalWorkflowEnabled ? "Save to My Requests" : toManager ? "Submit for Approval" : "Submit";
   const duplicateUnexplained =
     findings.some((finding) => findingKind(finding) === "duplicate") && !state.expense.duplicateOverrideReason;
   return (

@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { HttpError } from "../middleware/errorHandler.js";
 import { requireDatabase } from "../middleware/requireDatabase.js";
 import { validate } from "../middleware/validate.js";
 import { Expense } from "../models/Expense.js";
+import { assertExpenseAccess } from "../services/expenseAccess.js";
 import { expensePolicy } from "../policy/expensePolicy.js";
 import { evaluateExpensePolicy } from "../policy/policyService.js";
 import { employeeFromSession } from "../services/employeeIdentity.js";
@@ -31,10 +31,8 @@ policyRouter.post("/check", requireDatabase, validate({ body: checkSchema }), as
   let owner;
   if (expenseId) {
     const stored = await Expense.findById(expenseId).lean();
-    if (!stored) throw new HttpError(404, "EXPENSE_NOT_FOUND", "Expense not found.");
-    if (stored.employeeId !== req.user.id && req.user.role === "EMPLOYEE") {
-      throw new HttpError(403, "FORBIDDEN", "You do not have permission to do this.");
-    }
+    // Same visibility as GET /api/expenses/:id (own; assigned approver; Finance).
+    assertExpenseAccess(req.user, stored);
     owner = { employeeId: stored.employeeId, employee: stored.employee, position: stored.position };
   } else {
     const { employeeId, employee, position } = employeeFromSession(req.user, fields);

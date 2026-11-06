@@ -36,6 +36,8 @@ export const ENDPOINTS = {
     n8n: "/webhook/expense-submit",
     method: "POST",
   },
+  // The original scanned receipt (image/PDF) of an expense, for those who may view it.
+  receiptFile: { rest: "/expenses/{id}/receipt", n8n: "/webhook/expense-receipt?id={id}" },
   approve: {
     rest: "/expenses/{id}/approve",
     n8n: "/webhook/expense-approve",
