@@ -8,8 +8,51 @@ import {
 } from "lucide-react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { downloadReceipt, openReceipt } from "../../services/receiptFiles";
+import { api } from "../../services/api";
 
-export function ReceiptViewer({ file }) {
+// The scan file of a saved expense has no browser link: its stored original is
+// loaded through the API (with the session), if the server kept it.
+const isStoredScanFile = (file, expenseId) =>
+  /^[a-f0-9]{24}$/i.test(String(expenseId ?? "")) &&
+  /^job-/.test(file?.id || "") &&
+  !/^(https?:|blob:|data:)/.test(file?.url || "");
+
+export function ReceiptViewer({ file, expenseId }) {
+  const fromServer = isStoredScanFile(file, expenseId);
+  const [stored, setStored] = useState({ url: "", loading: fromServer });
+  useEffect(() => {
+    if (!fromServer) return undefined;
+    let cancelled = false;
+    let objectUrl = "";
+    setStored({ url: "", loading: true });
+    api.getReceiptFile(expenseId).then(
+      (blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setStored({ url: objectUrl, loading: false });
+      },
+      // Not kept (older scans) or not available: the "not stored" view below.
+      () => !cancelled && setStored({ url: "", loading: false }),
+    );
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [fromServer, expenseId, file?.id]);
+  if (fromServer && stored.loading) {
+    return (
+      <div className="receipt-view">
+        <div className="receipt-canvas receipt-not-stored" role="status">
+          <p>Loading the original receipt…</p>
+        </div>
+        <small className="muted">{file.name}</small>
+      </div>
+    );
+  }
+  return <ReceiptFileViewer file={stored.url ? { ...file, url: stored.url } : file} />;
+}
+
+function ReceiptFileViewer({ file }) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const { run } = useWorkspace();

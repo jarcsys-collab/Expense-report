@@ -3913,3 +3913,50 @@ summary {
 .composer-draft-note a {
   text-decoration: underline;
 }
+
+/* Low-confidence OCR fields the employee confirms or corrects (OcrFieldConfirmation.jsx). */
+.ocr-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+}
+.ocr-status.needs-confirmation {
+  color: var(--theme-warning-ink);
+}
+.ocr-status.confirmed,
+.ocr-status.corrected {
+  color: var(--theme-success-ink);
+}
+.ocr-confirm-button {
+  border: 1px solid var(--theme-warning-border);
+  background: var(--theme-warning-bg);
+  color: var(--theme-warning-ink);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ocr-confirm-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ocr-confirm-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.ocr-confirm-list li + li {
+  margin-top: 4px;
+}
+.chat-confirmed {
+  color: var(--theme-success-ink);
+  white-space: nowrap;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  display: inline-flex;
+}

@@ -2,6 +2,7 @@ import { config } from "../config/appConfig";
 import { EXPENSE_STATUSES } from "../config/constants";
 import { createId, nowIso, sanitizeFileName } from "../utils/format";
 import { asObject, toConfidence, toNumber, toText } from "../utils/values";
+import { ocrConfirmationsPayload } from "../utils/ocrConfirmation";
 
 export function unwrapResponse(response) {
   let current = response;
@@ -394,6 +395,8 @@ export function normalizeExpense(response, options = {}) {
   if (Array.isArray(rawDuplicates)) {
     expense.possibleDuplicates = rawDuplicates.map((rawDuplicate) => {
       const duplicate = asObject(rawDuplicate);
+      // Another employee's similar request: the server sends no details.
+      if (duplicate.otherEmployee === true) return { id: "other-employee", otherEmployee: true };
       return {
         id: toText(duplicate.id ?? duplicate.expenseId),
         merchant: toText(duplicate.merchant ?? duplicate.merchantName),
@@ -440,6 +443,22 @@ export function normalizeExpense(response, options = {}) {
   // Printed receipt date, its possible readings and the employee's confirmation.
   const dateReview = asObject(source.dateReview);
   if (Object.keys(dateReview).length) expense.dateReview = dateReview;
+  // Low-confidence OCR fields and the employee's confirmations (server records).
+  if (Array.isArray(source.ocrFieldReviews)) {
+    expense.ocrFieldReviews = source.ocrFieldReviews
+      .map((review) => asObject(review))
+      .filter((review) => ["merchant", "expenseDate", "amount", "currency"].includes(review.field))
+      .map((review) => ({
+        field: review.field,
+        reason: review.reason === "not_read" ? "not_read" : "low_confidence",
+        ocrValue: review.ocrValue ?? null,
+        ocrConfidence: typeof review.ocrConfidence === "number" ? review.ocrConfidence : null,
+        status: toText(review.status, "needs_confirmation"),
+        confirmedValue: review.confirmedValue ?? null,
+        confirmedBy: review.confirmedBy ? { id: toText(review.confirmedBy.id), name: toText(review.confirmedBy.name) } : null,
+        confirmedAt: review.confirmedAt ? toText(review.confirmedAt) : null,
+      }));
+  }
   if (Array.isArray(source.extractionNotes)) {
     expense.extractionNotes = source.extractionNotes
       .map((note) => toText(note))
@@ -585,9 +604,13 @@ function ownerIdentity(source, fallback, fields, user) {
 export function toExpensePayload(expense) {
   // Only the assistant marks a save as an incomplete draft (expenseService
   // options); every other save is the employee's own and clears the mark.
-  const { incompleteDraft, ...rest } = expense;
+  // ocrFieldReviews are server records (never sent back); ocrConfirmations only
+  // for values still on the expense.
+  const { incompleteDraft, ocrFieldReviews, ocrConfirmations, ...rest } = expense;
+  const confirmations = ocrConfirmationsPayload(expense);
   return {
     ...rest,
+    ...(confirmations ? { ocrConfirmations: confirmations } : {}),
     receiptFiles: rest.receiptFiles?.map((file) => ({
       ...file,
       url: /^(blob:|data:)/.test(file.url) ? undefined : file.url,

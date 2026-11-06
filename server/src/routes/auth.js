@@ -59,7 +59,7 @@ authRouter.post("/entra", entraLimiter, requireDatabase, validate({ body: entraS
     jobTitle: profile.jobTitle,
   };
   const sessionToken = await createSession(res, user, env.entra.sessionHours);
-  res.json({ user: { ...user, position: user.jobTitle }, profileSource: profile.profileSource, sessionToken });
+  res.json({ user: { ...user, position: user.jobTitle }, profileSource: profile.profileSource, sessionToken, features: sessionFeatures() });
 });
 
 // ---------------------------------------------------------------------------
@@ -94,18 +94,22 @@ authRouter.post("/login", loginLimiter, requireDatabase, validate({ body: loginS
   await destroySession(req);
   const user = { id: BETA_USER.id, name: BETA_USER.name, role: BETA_USER.role, provider: "beta" };
   const sessionToken = await createSession(res, user, env.betaAuth.sessionHours);
-  res.json({ user, sessionToken });
+  res.json({ user, sessionToken, features: sessionFeatures() });
 });
 
 // ---------------------------------------------------------------------------
 // Shared session routes
 // ---------------------------------------------------------------------------
 
+// Server-controlled features the frontend may display (the server enforces them).
+const sessionFeatures = () => ({ approvalWorkflow: env.approvalWorkflowEnabled });
+
 // GET /api/auth/session: the signed-in user, or 401.
 authRouter.get("/session", async (req, res) => {
   const user = await resolveUser(req);
   if (!user) throw new HttpError(401, "UNAUTHENTICATED", "Sign in to continue.");
-  res.json({ user });
+  // Server-controlled features (display only: the server enforces them).
+  res.json({ user, features: sessionFeatures() });
 });
 
 // POST /api/auth/logout: deletes the server-side session and clears the cookie.

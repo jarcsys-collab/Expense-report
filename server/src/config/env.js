@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -59,6 +60,66 @@ const schema = z.object({
     .default("https://api.veryfi.com")
     .refine((value) => /^https:\/\/[^\s/]+\/?$/.test(value), { message: "must be an https origin" }),
   VERYFI_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(300).default(90),
+  // Which OCR provider reads receipts. Veryfi stays available for rollback.
+  // "google" is accepted as a short form of "google_document_ai".
+  OCR_PROVIDER: z
+    .enum(["veryfi", "google", "google_document_ai"])
+    .default("veryfi")
+    .transform((value) => (value === "google" ? "google_document_ai" : value)),
+  // Google Cloud Document AI (Expense Parser), backend only.
+  GOOGLE_DOCUMENT_AI_PROJECT_ID: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^[a-z0-9][a-z0-9-]{4,61}[a-z0-9]$|^\d+$/.test(value), { message: "must be a Google Cloud project ID or number" })
+    .default(""),
+  GOOGLE_DOCUMENT_AI_LOCATION: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^[a-z]+(-[a-z]+\d*)?$/.test(value), { message: "must be a Document AI location such as us, eu or asia-southeast1" })
+    .default(""),
+  GOOGLE_DOCUMENT_AI_PROCESSOR_ID: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^[a-z0-9]+$/.test(value), { message: "must be the processor ID (lowercase letters and digits)" })
+    .default(""),
+  // Optional: pin a processor version; empty uses the processor's default version.
+  GOOGLE_DOCUMENT_AI_PROCESSOR_VERSION: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^[a-zA-Z0-9._-]+$/.test(value), { message: "must be a processor version ID" })
+    .default(""),
+  // Service-account key JSON (raw JSON, or the same JSON base64-encoded).
+  // Production (Railway): a sealed variable. Takes precedence over the file below.
+  GOOGLE_DOCUMENT_AI_CREDENTIALS_JSON: z.string().trim().default(""),
+  // Local development: path to the key file (Google's standard variable),
+  // e.g. server/secrets/google-ocr-key.json. Relative paths resolve from server/.
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().trim().default(""),
+  GOOGLE_DOCUMENT_AI_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(300).default(60),
+  // When an employee changes the scanned receipt total, the change is flagged for
+  // review unless it is within BOTH limits. Defaults 0 = every change is flagged.
+  // Finance approves any non-zero tolerance.
+  // Manager Approval / Finance routing on submit. Off: a checked request is saved
+  // to My Requests as "Pending Workflow Setup" and routed nowhere. Server-only
+  // (the browser cannot change it). Turning it on routes only requests submitted
+  // afterwards; saved requests wait for the employee to submit them.
+  APPROVAL_WORKFLOW_ENABLED: z
+    .enum(["true", "false", ""])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Removal of ABANDONED receipt files (no expense uses them). Off by default;
+  // when on, dry-run unless RECEIPT_CLEANUP_DRY_RUN=false.
+  RECEIPT_CLEANUP_ENABLED: z
+    .enum(["true", "false", ""])
+    .default("false")
+    .transform((value) => value === "true"),
+  RECEIPT_CLEANUP_DRY_RUN: z
+    .enum(["true", "false", ""])
+    .default("true")
+    .transform((value) => value !== "false"),
+  RECEIPT_CLEANUP_ABANDONED_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+  RECEIPT_CLEANUP_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  OCR_TOTAL_CORRECTION_TOLERANCE_AMOUNT: z.coerce.number().min(0).max(1e6).default(0),
+  OCR_TOTAL_CORRECTION_TOLERANCE_PERCENT: z.coerce.number().min(0).max(100).default(0),
   // How to read ambiguous numeric receipt dates such as 10/03/2026 (Philippines: day/month).
   RECEIPT_DATE_ORDER: z.enum(["DMY", "MDY"]).default("DMY"),
 });
@@ -73,6 +134,65 @@ if (!parsed.success) {
 
 const raw = parsed.data;
 const isProduction = raw.NODE_ENV === "production";
+
+// Reads the Google service-account key without ever logging its contents.
+// A bad key disables Google OCR (with a reason) instead of stopping the server,
+// so OCR_PROVIDER=veryfi keeps working while the key is being fixed.
+export function parseGoogleCredentials(value) {
+  if (!value) return { credentials: null, error: null };
+  let text = value;
+  if (!text.startsWith("{")) {
+    try {
+      text = Buffer.from(text, "base64").toString("utf8").trim();
+    } catch {
+      return { credentials: null, error: "is neither JSON nor base64-encoded JSON" };
+    }
+  }
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { credentials: null, error: "is not valid JSON (paste the whole key file)" };
+  }
+  if (json?.type !== "service_account") return { credentials: null, error: 'is not a service-account key (expected "type": "service_account")' };
+  if (typeof json.client_email !== "string" || !json.client_email.includes("@")) return { credentials: null, error: "has no client_email" };
+  if (typeof json.private_key !== "string" || !json.private_key.includes("PRIVATE KEY")) return { credentials: null, error: "has no private_key" };
+  return {
+    credentials: {
+      client_email: json.client_email,
+      private_key: json.private_key,
+      privateKeyId: typeof json.private_key_id === "string" ? json.private_key_id : "",
+      projectId: typeof json.project_id === "string" ? json.project_id : "",
+    },
+    error: null,
+  };
+}
+
+// Reads the key file named by GOOGLE_APPLICATION_CREDENTIALS (local development).
+export function loadGoogleCredentialsFile(filePath, baseDir) {
+  const resolved = path.resolve(baseDir, filePath);
+  let text;
+  try {
+    text = fs.readFileSync(resolved, "utf8").trim();
+  } catch {
+    return { credentials: null, error: "points to a file that cannot be read" };
+  }
+  return parseGoogleCredentials(text);
+}
+
+const SERVER_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const googleSource = raw.GOOGLE_DOCUMENT_AI_CREDENTIALS_JSON
+  ? "GOOGLE_DOCUMENT_AI_CREDENTIALS_JSON"
+  : raw.GOOGLE_APPLICATION_CREDENTIALS
+    ? "GOOGLE_APPLICATION_CREDENTIALS"
+    : null;
+const google =
+  googleSource === "GOOGLE_DOCUMENT_AI_CREDENTIALS_JSON"
+    ? parseGoogleCredentials(raw.GOOGLE_DOCUMENT_AI_CREDENTIALS_JSON)
+    : googleSource
+      ? loadGoogleCredentialsFile(raw.GOOGLE_APPLICATION_CREDENTIALS, SERVER_DIR)
+      : { credentials: null, error: null };
+if (google.error) console.error(`${googleSource} ${google.error}. Google Document AI OCR is disabled.`);
 
 const configuredOrigins = raw.FRONTEND_ORIGIN.split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
@@ -120,6 +240,17 @@ export const env = {
   },
   trustProxy: raw.TRUST_PROXY,
   receiptDateOrder: raw.RECEIPT_DATE_ORDER,
+  approvalWorkflowEnabled: raw.APPROVAL_WORKFLOW_ENABLED,
+  receiptCleanup: {
+    enabled: raw.RECEIPT_CLEANUP_ENABLED,
+    dryRun: raw.RECEIPT_CLEANUP_DRY_RUN,
+    abandonedDays: raw.RECEIPT_CLEANUP_ABANDONED_DAYS,
+    intervalHours: raw.RECEIPT_CLEANUP_INTERVAL_HOURS,
+  },
+  ocrTotalCorrectionTolerance: {
+    amount: raw.OCR_TOTAL_CORRECTION_TOLERANCE_AMOUNT,
+    percent: raw.OCR_TOTAL_CORRECTION_TOLERANCE_PERCENT,
+  },
   veryfi: {
     clientId: raw.VERYFI_CLIENT_ID,
     clientSecret: raw.VERYFI_CLIENT_SECRET,
@@ -132,6 +263,20 @@ export const env = {
       raw.VERYFI_CLIENT_ID && raw.VERYFI_CLIENT_SECRET && raw.VERYFI_USERNAME && raw.VERYFI_API_KEY,
     ),
   },
+  ocrProvider: raw.OCR_PROVIDER,
+  googleDocumentAi: {
+    projectId: raw.GOOGLE_DOCUMENT_AI_PROJECT_ID,
+    location: raw.GOOGLE_DOCUMENT_AI_LOCATION,
+    processorId: raw.GOOGLE_DOCUMENT_AI_PROCESSOR_ID,
+    processorVersion: raw.GOOGLE_DOCUMENT_AI_PROCESSOR_VERSION,
+    credentials: google.credentials,
+    credentialsError: google.error,
+    credentialsSource: google.credentials ? googleSource : null,
+    timeoutSeconds: raw.GOOGLE_DOCUMENT_AI_TIMEOUT_SECONDS,
+    configured: Boolean(
+      raw.GOOGLE_DOCUMENT_AI_PROJECT_ID && raw.GOOGLE_DOCUMENT_AI_LOCATION && raw.GOOGLE_DOCUMENT_AI_PROCESSOR_ID && google.credentials,
+    ),
+  },
 };
 
 // Values that must never appear in logs or responses.
@@ -141,6 +286,9 @@ export const SECRET_VALUES = [
   raw.VERYFI_CLIENT_SECRET,
   raw.VERYFI_API_KEY,
   raw.BETA_AUTH_PASSWORD,
+  raw.GOOGLE_DOCUMENT_AI_CREDENTIALS_JSON,
+  google.credentials?.private_key,
+  google.credentials?.privateKeyId,
 ].filter((value) => value && value.length >= 6);
 
 export function redactSecrets(text) {
@@ -148,5 +296,8 @@ export function redactSecrets(text) {
   for (const secret of SECRET_VALUES) out = out.split(secret).join("[redacted]");
   return out
     .replace(/mongodb(\+srv)?:\/\/[^\s"']+/gi, "mongodb://[redacted]")
-    .replace(/apikey\s+[^\s"',}]+/gi, "apikey [redacted]");
+    .replace(/apikey\s+[^\s"',}]+/gi, "apikey [redacted]")
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----|$)/g, "[redacted private key]")
+    .replace(/"private_key(_id)?"\s*:\s*"[^"]*"/g, '"private_key$1":"[redacted]"')
+    .replace(/(Bearer|access_token["=:\s]+)\s*[A-Za-z0-9._~+/=-]{20,}/gi, "$1 [redacted]");
 }

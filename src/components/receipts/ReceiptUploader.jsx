@@ -146,7 +146,7 @@ export function ReceiptUploader() {
               {" Browse Files"}
             </button>
           </div>
-          <small>JPG, PNG, WEBP, HEIC or PDF · up to 20 MB</small>
+          <small>JPG, PNG, WEBP, HEIC or PDF · up to 10 MB</small>
         </div>
         <div className="upload-queue">
           {queue.length ? (

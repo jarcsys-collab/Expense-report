@@ -57,9 +57,11 @@ export function ReceiptAssociation({ expense }) {
       )}
       {notStored && (
         <p className="receipt-storage-note">
-          {temporary
-            ? "The preview is available until you leave this page. ReceiptFlow saves the file details and scanned data, not the original image or PDF."
-            : "Original image or PDF not stored. ReceiptFlow keeps the file details and scanned data only."}
+          {expense.receiptJobId
+            ? "The original receipt is kept with the scan and can be opened from the request. Scans made before receipts were kept have only the file details and extracted data."
+            : temporary
+              ? "The preview is available until you leave this page. Files attached without a scan are not stored."
+              : "Original image or PDF not stored. ReceiptFlow keeps the file details only."}
         </p>
       )}
     </div>

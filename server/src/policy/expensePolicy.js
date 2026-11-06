@@ -53,7 +53,9 @@ export const expensePolicy = {
   // approval flow. Not counted: Draft, Processing and Needs Review (never
   // submitted), Rejected, and Needs Correction (returned; counted again when
   // resubmitted). Deleted expenses no longer exist.
-  monthlyCountedStatuses: ["Submitted", "Pending Approval", "Approved", "Reimbursed"],
+  // Saved requests waiting for workflow setup count too, so saving several
+  // requests cannot get around a monthly limit.
+  monthlyCountedStatuses: ["Submitted", "Pending Approval", "Approved", "Reimbursed", "Pending Workflow Setup"],
 
   // Representations of PHP 5,000.00 and above need proof of ExCom approval.
   representationRules: {

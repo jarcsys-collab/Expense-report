@@ -12,6 +12,29 @@ import {
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { api } from "../../services/api";
 import { downloadReceipt } from "../../services/receiptFiles";
+import { EDITABLE_STATUSES } from "../../config/constants";
+
+// The file entry of the receipt scan (no browser URL): opened from the server.
+const isScanFile = (file, expense) =>
+  Boolean(expense.receiptJobId) && file.id === `job-${expense.receiptJobId}` && !/^https?:\/\//.test(file.url || "");
+
+// Opens the stored original receipt in a new tab (fetched with the session).
+async function openScannedReceipt(expenseId) {
+  const popup = window.open("about:blank", "_blank");
+  if (!popup) throw new Error("Allow pop-ups for this workspace to open the original receipt.");
+  popup.opener = null;
+  try {
+    const blob = await api.getReceiptFile(expenseId);
+    const url = URL.createObjectURL(blob);
+    popup.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 6e4);
+  } catch (error) {
+    popup.close();
+    throw error?.status === 404
+      ? new Error("The original receipt isn’t stored for this request (scanned before receipts were kept).")
+      : error;
+  }
+}
 import { formatCurrency, formatDate } from "../../utils/format";
 import { ConfirmDialog } from "../common/ConfirmDialog";
 import { ErrorState } from "../common/ErrorState";
@@ -65,9 +88,7 @@ export function ExpenseDrawer({ base: basePath = "/requests" }) {
     ["Pending Approval", "Submitted"].includes(expense.status);
   const canEdit =
     expense &&
-    ["Draft", "Needs Review", "Needs Correction", "Rejected"].includes(
-      expense.status,
-    ) &&
+    EDITABLE_STATUSES.includes(expense.status) &&
     (user.role === "FINANCE_ADMIN" || expense.employeeId === user.id);
   const daysInactive = expense
     ? Math.floor((Date.now() - new Date(expense.updatedAt).getTime()) / 864e5)
@@ -278,12 +299,16 @@ export function ExpenseDrawer({ base: basePath = "/requests" }) {
                           {"Uploaded by "}
                           {expense.employeeName}
                         </small>
-                        {!hasStoredFile(file) && (
-                          <small>
-                            {expense.receiptJobId
-                              ? "Linked to receipt scan · original file not stored"
-                              : "Original file not stored"}
-                          </small>
+                        {!hasStoredFile(file) && !isScanFile(file, expense) && (
+                          <small>Original file not stored</small>
+                        )}
+                        {isScanFile(file, expense) && (
+                          <button
+                            className="text-button"
+                            onClick={() => void run(() => openScannedReceipt(expense.id))}
+                          >
+                            Open original receipt
+                          </button>
                         )}
                         <div className="file-actions">
                           {hasStoredFile(file) && (

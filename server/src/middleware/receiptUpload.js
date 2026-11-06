@@ -1,8 +1,9 @@
 import multer from "multer";
 import { HttpError } from "./errorHandler.js";
 
-// Matches the frontend (src/utils/receiptFile.js): JPG, PNG, WEBP, HEIC/HEIF or PDF, up to 20 MB.
-export const MAX_RECEIPT_BYTES = 20 * 1024 * 1024;
+// Matches the frontend (src/utils/receiptFile.js): JPG, PNG, WEBP, HEIC/HEIF or PDF, up to 10 MB.
+// (HEIC/HEIF is refused later when the OCR provider cannot read it: Google Document AI.)
+export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 const TYPES_BY_EXTENSION = {
   jpg: ["image/jpeg"],
   jpeg: ["image/jpeg"],
@@ -50,7 +51,9 @@ export function receiptUpload(req, res, next) {
     if (error) {
       if (error instanceof multer.MulterError) {
         if (error.code === "LIMIT_FILE_SIZE") {
-          return next(new HttpError(413, "FILE_TOO_LARGE", "The receipt is larger than 20 MB."));
+          return next(
+            new HttpError(413, "FILE_TOO_LARGE", "The receipt is larger than 10 MB. Retake the photo closer to the receipt, or compress the PDF."),
+          );
         }
         if (error.code === "LIMIT_UNEXPECTED_FILE") {
           return next(new HttpError(400, "UNEXPECTED_FIELD", "Upload the file in the \"receipt\" field."));

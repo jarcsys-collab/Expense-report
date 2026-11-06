@@ -109,6 +109,9 @@ function acceptUser(payload) {
     email: text(account.email),
     department: text(account.department),
     position: text(account.position || account.jobTitle),
+    // Server-controlled (display only; the server enforces it): whether submitting
+    // routes to Manager Approval / Finance, or only saves to My Requests.
+    approvalWorkflowEnabled: payload?.features?.approvalWorkflow === true,
   };
   return currentUser;
 }

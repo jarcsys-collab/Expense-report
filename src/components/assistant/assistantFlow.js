@@ -7,6 +7,8 @@
 // duplicates, anomalies and approval routing. The flow only decides which
 // question to ask next; what the server reports is shown as it was returned.
 
+import { confirmOcrFields, fieldsNeedingOcrConfirmation, sameOcrValue } from "../../utils/ocrConfirmation";
+
 export const STEPS = {
   WELCOME: "WELCOME",
   WAITING_FOR_RECEIPT: "WAITING_FOR_RECEIPT",
@@ -14,6 +16,8 @@ export const STEPS = {
   OCR_PROCESSING: "OCR_PROCESSING",
   REVIEW_EXTRACTED_DATA: "REVIEW_EXTRACTED_DATA",
   CONFIRM_DATE: "CONFIRM_DATE",
+  // Key receipt fields OCR read with low confidence: the employee confirms or corrects them.
+  CONFIRM_OCR_FIELDS: "CONFIRM_OCR_FIELDS",
   COLLECT_MISSING_INFORMATION: "COLLECT_MISSING_INFORMATION",
   RUNNING_POLICY_CHECKS: "RUNNING_POLICY_CHECKS",
   SHOW_POLICY_RESULTS: "SHOW_POLICY_RESULTS",
@@ -164,12 +168,17 @@ export function routeSentence(report) {
 export const STATUS_LABELS = {
   Submitted: "Submitted · with Finance",
   "Pending Approval": "Pending Manager Approval",
+  "Pending Workflow Setup": "Saved · approval routing not set up yet",
 };
 
 // The steps an expense passes through, from the server's status and route.
 // Upcoming steps are never shown as completed.
 export function statusTimeline(expense) {
   const status = expense.status;
+  // Saved while approval routing is switched off: not with anyone yet.
+  if (status === "Pending Workflow Setup") {
+    return [{ key: status, label: "Saved in My Requests · approval routing not set up yet", state: "current" }];
+  }
   const viaManager = expense.anomalyReport?.route === "manager_approval" || status === "Pending Approval";
   const order = ["Submitted", ...(viaManager ? ["Pending Approval"] : []), "Approved", "Reimbursed"];
   const labels = {
@@ -238,6 +247,24 @@ function askNext(state) {
       step: STEPS.CONFIRM_DATE,
       question: null,
       messages: [...state.messages, say("date", { review: state.expense.dateReview })],
+    };
+  }
+  // Uncertain OCR readings are confirmed before the policy checks run, so the
+  // checks see values the employee vouched for.
+  const unconfirmed = fieldsNeedingOcrConfirmation(state.expense);
+  if (unconfirmed.length) {
+    if (state.step === STEPS.CONFIRM_OCR_FIELDS) return state;
+    return {
+      ...state,
+      step: STEPS.CONFIRM_OCR_FIELDS,
+      question: null,
+      messages: [
+        ...state.messages,
+        say("ocrConfirm", {
+          fields: unconfirmed.map((field) => ({ ...field, value: state.expense[field.field] })),
+          currency: state.expense.currency,
+        }),
+      ],
     };
   }
   const [field, ...rest] = missingFields(state);
@@ -355,7 +382,17 @@ function step(state, action) {
       return askNext({ ...state, messages: [...state.messages, reply("The details look right.")] });
 
     case "DETAILS_EDITED": {
-      const next = { ...state, expense: action.expense, serverMissing: [], serverMessages: {} };
+      // A key field the employee changed while it awaited confirmation is an
+      // explicit correction; unchanged ones still need their confirmation.
+      const corrected = fieldsNeedingOcrConfirmation(state.expense)
+        .map((field) => field.field)
+        .filter((field) => !sameOcrValue(field, state.expense[field], action.expense[field]));
+      const next = {
+        ...state,
+        expense: confirmOcrFields(action.expense, corrected),
+        serverMissing: [],
+        serverMessages: {},
+      };
       return askNext({
         ...next,
         // Edited values are confirmed by the employee, category included.
@@ -373,6 +410,8 @@ function step(state, action) {
         ...state.expense,
         expenseDate: action.date,
         dateReview: { ...state.expense.dateReview, confirmedDate: action.date },
+        // Choosing the date also confirms it if OCR read it with low confidence.
+        ocrConfirmations: { ...(state.expense.ocrConfirmations ?? {}), expenseDate: action.date },
       };
       return askNext({
         ...state,
@@ -464,6 +503,25 @@ function step(state, action) {
       });
     }
 
+    case "OCR_FIELDS_CONFIRMED":
+      return askNext({
+        ...state,
+        step: STEPS.COLLECT_MISSING_INFORMATION,
+        expense: confirmOcrFields(state.expense, action.fields),
+        messages: [...state.messages, reply(action.label)],
+      });
+
+    case "OCR_FIELDS_REJECTED": {
+      // The server still needs these confirmed: ask again.
+      const confirmations = { ...(state.expense.ocrConfirmations ?? {}) };
+      for (const field of action.fields ?? []) delete confirmations[field];
+      return askNext({
+        ...state,
+        step: STEPS.COLLECT_MISSING_INFORMATION,
+        expense: { ...state.expense, ocrConfirmations: confirmations },
+      });
+    }
+
     case "DATE_REJECTED":
       // The server still needs the date confirmed: ask again.
       return askNext({
@@ -515,6 +573,6 @@ function step(state, action) {
 
 // Values the server decides or normalizes, kept for the summary.
 function pickServerFields(saved) {
-  const { id, requestNumber, status, employeeName, position, department, employeeEmail, identityVerified, receiptFiles, receiptJobId, anomalyReport, possibleDuplicates, excomEvidence } = saved;
-  return { id, requestNumber, status, employeeName, position, department, employeeEmail, identityVerified, receiptFiles, receiptJobId, anomalyReport, possibleDuplicates, excomEvidence };
+  const { id, requestNumber, status, employeeName, position, department, employeeEmail, identityVerified, receiptFiles, receiptJobId, anomalyReport, possibleDuplicates, excomEvidence, ocrFieldReviews } = saved;
+  return { id, requestNumber, status, employeeName, position, department, employeeEmail, identityVerified, receiptFiles, receiptJobId, anomalyReport, possibleDuplicates, excomEvidence, ocrFieldReviews };
 }

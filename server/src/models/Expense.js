@@ -99,6 +99,10 @@ const possibleDuplicateSchema = new Schema(
     currency: text(3),
     expenseDate: text(10),
     receiptNumber: text(100),
+    // Whether the match is the same employee's request. Other employees'
+    // matches are shown only to Finance (services/expenseView.js).
+    sameEmployee: { type: Boolean },
+    employeeName: text(200),
   },
   embedded,
 );
@@ -113,6 +117,26 @@ const employeeSchema = new Schema(
     email: text(320),
     department: text(200),
     jobTitle: text(200),
+  },
+  embedded,
+);
+
+// Employee confirmation of a key receipt field OCR read with low confidence
+// (services/ocrFieldReview.js). Server-maintained: the original OCR value and
+// score come from the receipt scan, the identity from the session, the time
+// from the server. Never accepted from the browser.
+const ocrFieldReviewSchema = new Schema(
+  {
+    field: { type: String, enum: ["merchant", "expenseDate", "amount", "currency"], required: true },
+    // low_confidence: read below the threshold; not_read: missing from the scan (currency).
+    reason: { type: String, enum: ["low_confidence", "not_read"] },
+    receiptJobId: { type: Schema.Types.ObjectId, ref: "ReceiptJob" },
+    ocrValue: { type: Schema.Types.Mixed },
+    ocrConfidence: { type: Number, min: 0, max: 1 },
+    status: { type: String, enum: ["needs_confirmation", "confirmed", "corrected", "provided"], required: true },
+    confirmedValue: { type: Schema.Types.Mixed },
+    confirmedBy: { type: new Schema({ id: text(100), name: text(200) }, embedded), default: null },
+    confirmedAt: { type: Date, default: null },
   },
   embedded,
 );
@@ -171,6 +195,9 @@ const expenseSchema = new Schema(
     employeeName: text(200),
     position: text(200),
     department: text(200),
+    // Server-controlled (never from the request body). Existing values are kept and
+    // still give that approver read access. Future: set on submit by the server
+    // from the employee's manager (e.g. Microsoft Graph /users/{id}/manager).
     assignedApproverId: text(100),
     employee: { type: employeeSchema },
     excomEvidence: { type: excomEvidenceSchema },
@@ -187,6 +214,9 @@ const expenseSchema = new Schema(
     // Receipt date as printed, its possible readings and the employee's
     // confirmation (services/receiptDate.js). Server-maintained.
     dateReview: { type: Schema.Types.Mixed },
+    // Low-confidence key fields and the employee's confirmations. Absent on
+    // expenses without such fields (and on all older expenses).
+    ocrFieldReviews: { type: [ocrFieldReviewSchema], default: undefined },
 
     // Review and workflow
     policyViolations: { type: [violationSchema], default: [] },

@@ -28,6 +28,13 @@ export async function getExpenses(filters = {}) {
 // GET /expenses/{id}
 export const getExpense = (id) => expenseAction("expense", { id });
 
+// GET /expenses/{id}/receipt: the original scanned receipt as a Blob (sent with
+// the session cookie or token like every other API call).
+export async function getReceiptFile(id) {
+  const endpoint = resolveEndpoint("receiptFile", { id });
+  return apiRequest(endpoint.path, "GET", undefined, { responseType: "blob" });
+}
+
 // options.incompleteDraft: the Reimbursement Assistant is saving the draft only
 // so the server can run its checks (see Expense.incompleteDraft on the server).
 const withOptions = (expense, options = {}) => ({

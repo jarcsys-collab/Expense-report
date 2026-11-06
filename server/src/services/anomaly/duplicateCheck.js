@@ -10,8 +10,10 @@ const caseInsensitive = { locale: "en", strength: 2 };
  *   or, without a merchant, same receipt number + amount.
  * Incomplete assistant drafts (incompleteDraft) are never matched.
  * Returns [] when nothing matches, or null when the check could not run.
+ * Each match says whether it belongs to the same employee (ownerId): other
+ * employees' requests are only identified to Finance (services/expenseView.js).
  */
-export async function findPossibleDuplicates(expense, { excludeId } = {}) {
+export async function findPossibleDuplicates(expense, { excludeId, ownerId } = {}) {
   const merchant = String(expense.merchant || "").trim();
   const receiptNumber = String(expense.receiptNumber || "").trim();
   const amount = Number(expense.amount);
@@ -38,9 +40,11 @@ export async function findPossibleDuplicates(expense, { excludeId } = {}) {
       .collation(caseInsensitive)
       .sort({ createdAt: -1 })
       .limit(5)
-      .select("requestNumber merchant amount currency expenseDate receiptNumber status");
+      .select("requestNumber merchant amount currency expenseDate receiptNumber status employeeId employeeName");
     return matches.map((m) => ({
       id: String(m._id),
+      sameEmployee: Boolean(ownerId) && String(m.employeeId ?? "") === String(ownerId),
+      employeeName: m.employeeName,
       requestNumber: m.requestNumber,
       merchant: m.merchant,
       amount: m.amount,

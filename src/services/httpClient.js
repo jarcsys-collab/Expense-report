@@ -107,6 +107,10 @@ export async function apiRequest(path, method = "GET", body, options = {}) {
     if (response.status === 204) {
       return;
     }
+    // Files (e.g. the original receipt): returned as a Blob, never parsed.
+    if (options.responseType === "blob") {
+      return await response.blob();
+    }
     try {
       const data = await response.json();
       if (data && typeof data == "object" && data.success === false) {

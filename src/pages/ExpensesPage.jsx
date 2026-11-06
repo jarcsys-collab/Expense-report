@@ -69,7 +69,7 @@ export function ExpensesPage({ upload = false, approvals = false }) {
             <ReceiptUploader />
             {!loading && !error && visibleExpenses.length > 0 && (
               <div className="operational-summary">
-                {["Draft", "Pending Approval", "Needs Correction"].map((item) => (
+                {["Draft", "Pending Workflow Setup", "Pending Approval", "Needs Correction"].map((item) => (
                   <Link
                     key={item}
                     to="/requests"
