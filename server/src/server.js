@@ -1,6 +1,7 @@
 import { env } from "./config/env.js";
 import { connectDatabase, disconnectDatabase, isDatabaseConfigured } from "./config/database.js";
 import { createApp } from "./app.js";
+import { startNotificationWorker } from "./services/notifications/outbox.js";
 import { startReceiptCleanupSchedule } from "./services/receiptCleanupSchedule.js";
 
 const app = createApp();
@@ -20,6 +21,7 @@ let retryTimer;
 async function connectWithRetry() {
   if (await connectDatabase()) {
     startReceiptCleanupSchedule();
+    startNotificationWorker();
     return;
   }
   if (isDatabaseConfigured()) retryTimer = setTimeout(connectWithRetry, 15_000);

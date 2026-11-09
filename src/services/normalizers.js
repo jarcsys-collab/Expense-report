@@ -459,6 +459,13 @@ export function normalizeExpense(response, options = {}) {
         confirmedAt: review.confirmedAt ? toText(review.confirmedAt) : null,
       }));
   }
+  // VAT figures as printed, and how each scanned field ended up (server records).
+  const vatBreakdown = asObject(source.vatBreakdown);
+  if (Object.keys(vatBreakdown).length) expense.vatBreakdown = vatBreakdown;
+  else delete expense.vatBreakdown;
+  const ocrQuality = asObject(source.ocrQuality);
+  if (Array.isArray(ocrQuality.fields)) expense.ocrQuality = ocrQuality;
+  else delete expense.ocrQuality;
   if (Array.isArray(source.extractionNotes)) {
     expense.extractionNotes = source.extractionNotes
       .map((note) => toText(note))
@@ -606,7 +613,7 @@ export function toExpensePayload(expense) {
   // options); every other save is the employee's own and clears the mark.
   // ocrFieldReviews are server records (never sent back); ocrConfirmations only
   // for values still on the expense.
-  const { incompleteDraft, ocrFieldReviews, ocrConfirmations, ...rest } = expense;
+  const { incompleteDraft, ocrFieldReviews, ocrConfirmations, vatBreakdown, ocrQuality, ...rest } = expense;
   const confirmations = ocrConfirmationsPayload(expense);
   return {
     ...rest,

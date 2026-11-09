@@ -18,6 +18,8 @@ import {
   syncOcrFieldReviews,
   unconfirmedOcrFields,
 } from "../services/ocrFieldReview.js";
+import { queueAnomalyNotifications } from "../services/notifications/notificationService.js";
+import { buildOcrQuality } from "../services/ocrFieldStatus.js";
 import { applyDateConfirmation, describeIsoDate } from "../services/receiptDate.js";
 import { sendReceiptFile } from "../services/receiptFileStore.js";
 import { expenseForViewer } from "../services/expenseView.js";
@@ -129,6 +131,10 @@ function applyDateReview(expense, job, clientReview) {
 // findings are never trusted) and stores the report, findings and duplicates.
 async function applyAnomalyCheck(expense, job) {
   await linkCategory(expense);
+  // From the stored scan, never the browser: VAT figures as printed, and how each
+  // scanned field ended up (extracted, confirmed, corrected, provided or missing).
+  expense.vatBreakdown = job?.result?.vatBreakdown;
+  expense.ocrQuality = buildOcrQuality(expense, job);
   const report = await runAnomalyCheck({
     expense: expense.toObject(),
     stage: "submission",
@@ -171,12 +177,13 @@ expensesRouter.post("/", validate({ body: expenseCreateSchema }), async (req, re
   expense.activityLog.push(activity(req.user.name, job ? "Created expense from scanned receipt" : "Created expense"));
   applyDateReview(expense, job, dateReview);
   applyOcrFieldReviews(expense, job, req.user, ocrConfirmations);
-  await applyAnomalyCheck(expense, job);
+  const report = await applyAnomalyCheck(expense, job);
   await expense.save();
   if (job && !job.expenseId) {
     job.expenseId = expense._id;
     await job.save();
   }
+  await queueAnomalyNotifications({ expense, report, trigger: "save" });
   res.status(201).json(expenseForViewer(expense, req.user));
 });
 
@@ -213,8 +220,9 @@ expensesRouter.patch("/:id", validateObjectId(), validate({ body: expenseUpdateS
   applyDateReview(expense, job, dateReview);
   expense.activityLog.push(activity(req.user.name, "Updated expense"));
   applyOcrFieldReviews(expense, job, req.user, ocrConfirmations);
-  await applyAnomalyCheck(expense, job);
+  const report = await applyAnomalyCheck(expense, job);
   await expense.save();
+  await queueAnomalyNotifications({ expense, report, trigger: "save" });
   res.json(expenseForViewer(expense, req.user));
 });
 
@@ -325,6 +333,7 @@ expensesRouter.post("/:id/submit", validateObjectId(), validate({ body: submitSc
       }
       throw error;
     }
+    await queueAnomalyNotifications({ expense, report, trigger: "submission" });
     res.json(expenseForViewer(expense, req.user));
     return;
   }
@@ -349,6 +358,7 @@ expensesRouter.post("/:id/submit", validateObjectId(), validate({ body: submitSc
     }
     throw error;
   }
+  await queueAnomalyNotifications({ expense, report, trigger: "submission" });
   res.json(expenseForViewer(expense, req.user));
 });
 

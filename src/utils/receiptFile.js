@@ -1,6 +1,8 @@
 import { config } from "../config/appConfig";
 
-export function validateReceiptFile(file) {
+// allowOversizedImage: a photo over the limit is accepted here because it is compressed
+// before upload; the prepared file is what must fit the limit.
+export function validateReceiptFile(file, { allowOversizedImage = false } = {}) {
   const extension = file.name.split(".").pop()?.toLowerCase();
   const allowedTypes = [
     "image/jpeg",
@@ -31,7 +33,7 @@ export function validateReceiptFile(file) {
   if (file.type && !typesByExtension[extension].includes(file.type)) {
     throw new Error(`${file.name}: file extension and MIME type do not match.`);
   }
-  if (file.size > config.maxFileSize) {
+  if (file.size > config.maxFileSize && !(allowOversizedImage && extension !== "pdf")) {
     throw new Error(`${file.name} is larger than 10 MB. Retake the photo closer to the receipt, or compress the PDF.`);
   }
   if (!file.size) {

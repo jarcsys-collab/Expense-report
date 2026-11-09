@@ -5,6 +5,7 @@ import { config } from "../config/appConfig";
 import { requireSession } from "./authService";
 import * as categories from "./categoryService";
 import * as expenses from "./expenseService";
+import * as management from "./managementService";
 import * as policy from "./policyService";
 import * as receipts from "./receiptService";
 import * as violations from "./violationService";
@@ -31,6 +32,7 @@ const methods = {
   uploadReceipt: receipts.uploadReceipt,
   getOCRStatus: receipts.getOcrStatus,
   saveEditedFile: receipts.saveEditedFile,
+  ...management,
 };
 
 export const api = Object.fromEntries(

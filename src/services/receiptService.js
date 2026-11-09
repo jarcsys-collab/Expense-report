@@ -31,6 +31,7 @@ export async function uploadReceipt(files, options = {}) {
   const response = await apiRequest(endpoint.path, endpoint.method, form, {
     signal: options.signal,
     timeout: config.ocrTimeout,
+    onUploadProgress: options.onUploadProgress,
   });
   return normalizeOcrResult(response, { ...options, user: getActiveUser() });
 }
@@ -128,10 +129,10 @@ export async function waitForOcr(initialStatus, options) {
 // Reimbursement Assistant. `onStage` reports what is really happening:
 // "uploading" while the file is sent, "processing" while the API reports the
 // OCR job as still running.
-export async function scanReceipt({ upload, poll, files, jobId, signal, receiptId, previews, onStage, onJob }) {
+export async function scanReceipt({ upload, poll, files, jobId, signal, receiptId, previews, onStage, onJob, onUploadProgress }) {
   const options = { signal, receiptId, files: previews };
   onStage?.(jobId ? "processing" : "uploading");
-  const initial = jobId ? await poll(jobId, options) : await upload(files, options);
+  const initial = jobId ? await poll(jobId, options) : await upload(files, { ...options, onUploadProgress });
   if (signal.aborted) throw createAbortError();
   onJob?.(initial.jobId || undefined);
   const result = await waitForOcr(initial, {

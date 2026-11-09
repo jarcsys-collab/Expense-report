@@ -122,6 +122,28 @@ const schema = z.object({
   OCR_TOTAL_CORRECTION_TOLERANCE_PERCENT: z.coerce.number().min(0).max(100).default(0),
   // How to read ambiguous numeric receipt dates such as 10/03/2026 (Philippines: day/month).
   RECEIPT_DATE_ORDER: z.enum(["DMY", "MDY"]).default("DMY"),
+  // Anomaly notifications. Off by default: rules can be configured, but nothing is
+  // queued or delivered until this is true. Separate from approval routing.
+  NOTIFICATIONS_ENABLED: z
+    .enum(["true", "false", ""])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Email delivery is not connected. "mock" only records (never in production).
+  NOTIFICATION_EMAIL_PROVIDER: z.enum(["none", "mock"]).default("none"),
+  NOTIFICATION_WORKER_INTERVAL_SECONDS: z.coerce.number().int().min(5).max(3600).default(30),
+  // OCR cost ESTIMATES (dashboard only, never actual billing). Google Document AI
+  // Expense Parser list price, confirmed 2026-11-09 on
+  // https://cloud.google.com/products/document-ai/pricing: USD 0.10 per "count",
+  // where 1 count = up to 10 pages of a document. Failed 4xx/5xx requests are not billed.
+  OCR_COST_GOOGLE_USD_PER_UNIT: z.coerce.number().min(0).max(1000).default(0.1),
+  OCR_COST_GOOGLE_PAGES_PER_UNIT: z.coerce.number().int().min(1).max(1000).default(10),
+  // Veryfi price per document, from your own contract. 0 = no estimate is shown.
+  OCR_COST_VERYFI_USD_PER_DOCUMENT: z.coerce.number().min(0).max(1000).default(0),
+  // Estimated monthly spend that raises a dashboard alert. 0 = no alert.
+  OCR_MONTHLY_BUDGET_USD: z.coerce.number().min(0).max(1e9).default(0),
+  // An identical file from the SAME account within this many days reuses the
+  // earlier reading instead of a new OCR request. 0 = only the short retry window.
+  OCR_REUSE_PRIOR_SCAN_DAYS: z.coerce.number().int().min(0).max(365).default(30),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -264,6 +286,19 @@ export const env = {
     ),
   },
   ocrProvider: raw.OCR_PROVIDER,
+  ocrCost: {
+    googleUsdPerUnit: raw.OCR_COST_GOOGLE_USD_PER_UNIT,
+    googlePagesPerUnit: raw.OCR_COST_GOOGLE_PAGES_PER_UNIT,
+    veryfiUsdPerDocument: raw.OCR_COST_VERYFI_USD_PER_DOCUMENT,
+    monthlyBudgetUsd: raw.OCR_MONTHLY_BUDGET_USD,
+  },
+  ocrReusePriorScanDays: raw.OCR_REUSE_PRIOR_SCAN_DAYS,
+  notifications: {
+    enabled: raw.NOTIFICATIONS_ENABLED,
+    // The mock provider can never run in production, whatever the variable says.
+    emailProvider: isProduction ? "none" : raw.NOTIFICATION_EMAIL_PROVIDER,
+    workerIntervalSeconds: raw.NOTIFICATION_WORKER_INTERVAL_SECONDS,
+  },
   googleDocumentAi: {
     projectId: raw.GOOGLE_DOCUMENT_AI_PROJECT_ID,
     location: raw.GOOGLE_DOCUMENT_AI_LOCATION,

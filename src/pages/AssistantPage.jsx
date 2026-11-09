@@ -26,6 +26,7 @@ import {
 } from "../components/assistant/ConversationParts";
 import { Spinner } from "../components/common/Spinner";
 import { ExcomEvidence } from "../components/expenses/PolicyExceptions";
+import { ReceiptPrepareModal } from "../components/receipts/ReceiptPrepareModal";
 import { config } from "../config/appConfig";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { api } from "../services/api";
@@ -65,6 +66,8 @@ export function AssistantPage() {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [policy, setPolicy] = useState(null);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [uploadPercent, setUploadPercent] = useState(null);
   const controller = useRef(null);
   const receipt = useRef(null);
   const objectUrls = useRef([]);
@@ -169,6 +172,7 @@ export function AssistantPage() {
     controller.current?.abort();
     const scan = new AbortController();
     controller.current = scan;
+    setUploadPercent(null);
     try {
       if (!navigator.onLine) {
         throw new Error("You’re offline. Reconnect, then retry.");
@@ -184,6 +188,7 @@ export function AssistantPage() {
         onJob: (id) => {
           receipt.current.jobId = id;
         },
+        onUploadProgress: setUploadPercent,
         onStage: (stage) => stage === "processing" && dispatch({ type: "OCR_PROCESSING" }),
       });
       dispatch({ type: "OCR_DONE", expense: withEmployee(result.expense, user) });
@@ -194,15 +199,21 @@ export function AssistantPage() {
     }
   }
 
+  // A chosen file or photo is only shown to the employee first. Nothing goes to OCR
+  // until they confirm it in the preview.
   function startScan(files) {
     const file = files[0];
     if (!file) return;
     try {
-      validateReceiptFile(file);
+      validateReceiptFile(file, { allowOversizedImage: true });
     } catch (error) {
       dispatch({ type: "FAILED", kind: "file", message: error.message });
       return;
     }
+    setPendingFile(file);
+  }
+
+  function beginScan(file) {
     const url = URL.createObjectURL(file);
     objectUrls.current.push(url);
     const id = createId();
@@ -453,6 +464,7 @@ export function AssistantPage() {
           composerRef={composerRef}
           state={state}
           busy={busy}
+          uploadPercent={uploadPercent}
           user={user}
           authenticated={authenticated}
           loading={loading}
@@ -491,6 +503,17 @@ export function AssistantPage() {
           event.target.value = "";
         }}
       />
+      {pendingFile && (
+        <ReceiptPrepareModal
+          file={pendingFile}
+          acceptsHeic={user.ocrAcceptsHeic}
+          onCancel={() => setPendingFile(null)}
+          onConfirm={(prepared) => {
+            setPendingFile(null);
+            beginScan(prepared);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -564,7 +587,8 @@ function composerContent(props) {
   const { state, busy, authenticated, loading, dispatch } = props;
   if (busy) {
     const text = {
-      [STEPS.UPLOADING]: "Reading your receipt…",
+      [STEPS.UPLOADING]:
+        props.uploadPercent !== null && props.uploadPercent < 100 ? `Uploading your receipt… ${props.uploadPercent}%` : "Reading your receipt…",
       [STEPS.OCR_PROCESSING]: "Extracting the details…",
       [STEPS.RUNNING_POLICY_CHECKS]: "Checking company policies…",
       [STEPS.SUBMITTING]: "Submitting your expense…",

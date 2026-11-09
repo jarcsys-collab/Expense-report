@@ -112,6 +112,11 @@ function acceptUser(payload) {
     // Server-controlled (display only; the server enforces it): whether submitting
     // routes to Manager Approval / Finance, or only saves to My Requests.
     approvalWorkflowEnabled: payload?.features?.approvalWorkflow === true,
+    // Whether to show Management (display only; every Management route checks it).
+    managementAccess: payload?.features?.management === true,
+    ocrAnalyticsAccess: payload?.features?.ocrAnalytics === true,
+    // Whether the OCR provider reads HEIC photos directly (Google Document AI does not).
+    ocrAcceptsHeic: payload?.features?.ocrAcceptsHeic === true,
   };
   return currentUser;
 }

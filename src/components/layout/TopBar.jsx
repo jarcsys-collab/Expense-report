@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LogIn, Receipt } from "lucide-react";
+import { Bell, LogIn, Receipt } from "lucide-react";
 import { config } from "../../config/appConfig";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { NOTIFICATIONS_CHANGED } from "../../pages/NotificationsPage";
+import { api } from "../../services/api";
 import { initials } from "../../utils/format";
 
 // Where the current screen sits, as [label, link] pairs (no link: current page).
@@ -22,6 +25,10 @@ function breadcrumbsFor(pathname) {
       return [["Expense Issues"]];
     case "categories":
       return [["Categories"]];
+    case "management":
+      return [["Management"]];
+    case "notifications":
+      return [["Notifications"]];
     case "profile":
       return [["Profile"]];
     case "settings":
@@ -29,6 +36,38 @@ function breadcrumbsFor(pathname) {
     default:
       return [["Page not found"]];
   }
+}
+
+const UNREAD_REFRESH_MS = 60_000;
+
+// The bell with the unread count. A failed check just keeps the last number.
+function NotificationBell() {
+  const { pathname } = useLocation();
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const check = () => {
+      if (document.visibilityState === "hidden") return;
+      api.getUnreadNotificationCount().then(
+        (count) => active && setUnread(count),
+        () => {},
+      );
+    };
+    check();
+    const timer = setInterval(check, UNREAD_REFRESH_MS);
+    window.addEventListener(NOTIFICATIONS_CHANGED, check);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener(NOTIFICATIONS_CHANGED, check);
+    };
+  }, [pathname]);
+  return (
+    <Link className="topbar-bell" to="/notifications" aria-label={unread ? `Notifications: ${unread} unread` : "Notifications"} title="Notifications">
+      <Bell size={20} aria-hidden="true" />
+      {unread > 0 && <b aria-hidden="true">{unread > 99 ? "99+" : unread}</b>}
+    </Link>
+  );
 }
 
 export function TopBar() {
@@ -55,6 +94,7 @@ export function TopBar() {
         </ol>
       </nav>
       <div className="topbar-actions">
+        {authenticated && <NotificationBell />}
         {config.apiBase && !authenticated && !loading ? (
           <Link className="button primary topbar-sign-in" to="/profile">
             <LogIn size={16} aria-hidden="true" />

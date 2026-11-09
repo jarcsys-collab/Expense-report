@@ -25,6 +25,34 @@ export function isAbortError(error) {
 export function createAbortError() {
   return new DOMException("Operation cancelled.", "AbortError");
 }
+// fetch() cannot report upload progress, so uploads that ask for it use
+// XMLHttpRequest and hand back an ordinary Response: everything after the request
+// (errors, parsing, timeouts) is the same code path.
+function fetchWithUploadProgress(url, { method, credentials, signal, headers, body }, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.withCredentials = credentials === "include";
+    xhr.responseType = "blob";
+    for (const [name, value] of Object.entries(headers ?? {})) xhr.setRequestHeader(name, value);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    xhr.onload = () => {
+      const empty = xhr.status === 204 || xhr.status === 205 || xhr.status === 304;
+      resolve(new Response(empty ? null : xhr.response, { status: xhr.status, headers: { "Content-Type": xhr.getResponseHeader("Content-Type") ?? "" } }));
+    };
+    xhr.onerror = () => reject(new TypeError("Network request failed."));
+    xhr.onabort = () => reject(createAbortError());
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(body);
+  });
+}
+
 export async function apiRequest(path, method = "GET", body, options = {}) {
   if (!config.apiBase && !/^https?:\/\//i.test(path)) {
     throw new ApiError(
@@ -64,7 +92,7 @@ export async function apiRequest(path, method = "GET", body, options = {}) {
     controller.abort();
   }, options.timeout ?? config.requestTimeout);
   try {
-    const response = await fetch(url.href, {
+    const init = {
       method,
       credentials: config.credentials,
       signal: controller.signal,
@@ -82,7 +110,10 @@ export async function apiRequest(path, method = "GET", body, options = {}) {
           : body instanceof FormData
             ? body
             : JSON.stringify(body),
-    });
+    };
+    const response = options.onUploadProgress
+      ? await fetchWithUploadProgress(url.href, init, options.onUploadProgress)
+      : await fetch(url.href, init);
     if (!response.ok) {
       let errorMessage = "";
       let errorDetails;

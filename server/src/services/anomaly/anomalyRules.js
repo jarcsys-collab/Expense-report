@@ -13,6 +13,7 @@
 
 import { isMaterialTotalCorrection, OCR_CONFIDENCE_THRESHOLD, sameValue } from "../ocrFieldReview.js";
 import { describeIsoDate } from "../receiptDate.js";
+import { receiptConsistencyIssues } from "../receiptConsistency.js";
 
 export const SOURCE_DOCUMENT = "Anomalies_reference.pdf";
 export const COMPANY_POLICY = "Company expense policy";
@@ -374,6 +375,8 @@ export const anomalyRules = [
           issues.push(`Line items add up to ${sum.toFixed(2)}, which matches neither the subtotal nor the total.`);
         }
       }
+      // VAT figures against each other and the total (only figures actually printed).
+      for (const issue of receiptConsistencyIssues(expense)) issues.push(issue.message);
       if (filled(expense.expenseDate) && expense.expenseDate > today) issues.push(`The date ${expense.expenseDate} is in the future.`);
       // A printed date like 10/03/2026 can be read as day/month or month/day
       // (services/receiptDate.js). Until the employee confirms it, the date is

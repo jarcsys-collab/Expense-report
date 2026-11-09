@@ -17,6 +17,8 @@ export const AUTH_ENDPOINTS = {
   login: "/auth/login",
 };
 
+const rest = (path, method) => ({ rest: path, n8n: path, ...(method ? { method } : {}) });
+
 export const ENDPOINTS = {
   expenses: { rest: "/expenses", n8n: "/webhook/expenses" },
   expense: { rest: "/expenses/{id}", n8n: "/webhook/expense?id={id}" },
@@ -92,6 +94,21 @@ export const ENDPOINTS = {
     n8n: "/webhook/receipt-file",
     method: "POST",
   },
+  // Management and notifications exist only on the REST API.
+  managementCatalog: rest("/management/catalog"),
+  managementDirectory: rest("/management/directory"),
+  notificationRules: rest("/management/notification-rules"),
+  createNotificationRule: rest("/management/notification-rules", "POST"),
+  updateNotificationRule: rest("/management/notification-rules/{id}", "PUT"),
+  deleteNotificationRule: rest("/management/notification-rules/{id}", "DELETE"),
+  testNotificationRule: rest("/management/notification-rules/{id}/test", "POST"),
+  notificationEvents: rest("/management/notification-events"),
+  managementAudit: rest("/management/audit"),
+  ocrAnalytics: rest("/management/ocr-analytics"),
+  myNotifications: rest("/notifications"),
+  unreadNotifications: rest("/notifications/unread-count"),
+  readNotification: rest("/notifications/{id}/read", "POST"),
+  readAllNotifications: rest("/notifications/read-all", "POST"),
 };
 
 // Returns { path, method } for a named endpoint, with {params} URL-encoded.

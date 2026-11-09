@@ -3,12 +3,13 @@ import {
   MessageCirclePlus,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Tags,
 } from "lucide-react";
 
 // `short` labels and `phone` are for the phone bottom navigation (< 640px);
 // destinations without `phone` stay reachable from the Profile page there.
-export function getNavItems(role, authenticated) {
+export function getNavItems(role, authenticated, managementAccess = false) {
   return [
     {
       to: "/upload",
@@ -42,6 +43,16 @@ export function getNavItems(role, authenticated) {
             label: "Categories",
             short: "Categories",
             icon: Tags,
+          },
+        ]
+      : []),
+    ...(managementAccess
+      ? [
+          {
+            to: "/management",
+            label: "Management",
+            short: "Manage",
+            icon: SlidersHorizontal,
           },
         ]
       : []),

@@ -6,6 +6,17 @@
 // confidence is the entity's own confidence (0-1).
 
 import { interpretReceiptDate } from "./receiptDate.js";
+import { receiptConsistencyIssues } from "./receiptConsistency.js";
+
+// Raised when the mapping changes, so an old reading is not reused for a re-upload.
+export const NORMALIZER_VERSION = 2;
+// Reported as "missing" in analytics when the scan did not read them.
+export const IMPORTANT_FIELDS = ["merchant", "merchantAddress", "expenseDate", "receiptNumber", "currency", "amount", "subtotal", "tax", "vatableSales", "paymentMethod", "lineItems"];
+const hasValue = (expense, field) => {
+  if (field === "vatableSales") return expense.vatBreakdown?.vatableSales !== undefined;
+  if (field === "lineItems") return (expense.lineItems?.length ?? 0) > 0;
+  return expense[field] !== undefined && expense[field] !== "";
+};
 
 const present = (v) => v !== undefined && v !== null && !(typeof v === "string" && v.trim() === "");
 const str = (v, max = 500) => (present(v) ? String(v).replace(/\s+/g, " ").trim().slice(0, max) : undefined);
@@ -13,12 +24,15 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const num = (v) => {
   if (typeof v === "number") return Number.isFinite(v) ? round2(v) : undefined;
   if (typeof v !== "string") return undefined;
-  // "1,234.50", "₱ 1 234.50", "(12.00)"; a lone comma decimal ("12,50") too.
+  // "1,234.50", "₱ 1 234.50", "PHP1,234.50", "(12.00)"; a lone comma decimal ("12,50") too.
   let text = v.replace(/[^\d.,()-]/g, "");
-  if (/^\(?-?\d+,\d{2}\)?$/.test(text)) text = text.replace(",", ".");
-  text = text.replace(/,/g, "");
   const negative = /^\(.*\)$/.test(text) || text.startsWith("-");
-  const n = Number(text.replace(/[()-]/g, ""));
+  text = text.replace(/[()-]/g, "");
+  if (/^\d+,\d{2}$/.test(text)) text = text.replace(",", ".");
+  // Anything else with separators in odd places ("1.234,50", "1,23,4") is not
+  // guessed: a misread amount would be worse than asking the employee.
+  else if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/.test(text)) return undefined;
+  const n = Number(text.replace(/,/g, ""));
   return text && Number.isFinite(n) ? round2(negative ? -n : n) : undefined;
 };
 const confidenceOf = (entity) =>
@@ -72,6 +86,13 @@ export function currencyCodeOf(value) {
 // Invoice No. (also "#", "Number", "Official Receipt", "Sales Invoice").
 const RECEIPT_NUMBER_LABEL =
   /(?:^|[^A-Za-z])(?:official\s+receipt|sales\s+invoice|o\.?\s?r\.?|s\.?\s?i\.?|receipt|invoice)\s*(?:no\.?|number|num\.?|#)\s*[:.#-]?\s*([A-Za-z0-9][A-Za-z0-9/-]{1,24})(?![A-Za-z0-9/-])(\.\d)?/gi;
+// The long labels may also go straight to the value: "Invoice: SI-00123".
+const RECEIPT_NUMBER_COLON_LABEL =
+  /(?:^|[^A-Za-z])(?:official\s+receipt|sales\s+invoice|receipt|invoice)\s*:\s*([A-Za-z0-9][A-Za-z0-9/-]{1,24})(?![A-Za-z0-9/-])(\.\d)?/gi;
+// A label alone on its line, with the value on the next line.
+const RECEIPT_NUMBER_LABEL_ONLY =
+  /^\s*(?:official\s+receipt|sales\s+invoice|o\.?\s?r\.?|s\.?\s?i\.?|receipt|invoice)\s*(?:no\.?|number|num\.?|#)\s*[:.#-]?\s*$/i;
+const LONE_VALUE = /^\s*([A-Za-z0-9][A-Za-z0-9/-]{1,24})\s*$/;
 function looksLikeNotAReceiptNumber(value, trailingDecimal) {
   if (!/\d/.test(value)) return true; // words such as "Copy"
   if (trailingDecimal) return true; // an amount like 335.50
@@ -87,15 +108,55 @@ function looksLikeNotAReceiptNumber(value, trailingDecimal) {
  * No value, or two different values, returns undefined (never guessed).
  */
 export function receiptNumberFromText(text) {
-  const values = new Set();
-  for (const line of String(text ?? "").split(/\r?\n/)) {
-    for (const match of line.matchAll(RECEIPT_NUMBER_LABEL)) {
-      const value = match[1].replace(/[/-]+$/, "");
-      if (!looksLikeNotAReceiptNumber(value, match[2])) values.add(value.toUpperCase());
-    }
-  }
+  const values = receiptNumbersInText(text);
   return values.size === 1 ? [...values][0] : undefined;
 }
+function receiptNumbersInText(text) {
+  const values = new Set();
+  const add = (raw, decimal) => {
+    const value = raw.replace(/[/-]+$/, "");
+    if (!looksLikeNotAReceiptNumber(value, decimal)) values.add(value.toUpperCase());
+  };
+  const lines = String(text ?? "").split(/\r?\n/);
+  lines.forEach((line, index) => {
+    for (const match of line.matchAll(RECEIPT_NUMBER_LABEL)) add(match[1], match[2]);
+    for (const match of line.matchAll(RECEIPT_NUMBER_COLON_LABEL)) add(match[1], match[2]);
+    if (RECEIPT_NUMBER_LABEL_ONLY.test(line)) {
+      const next = LONE_VALUE.exec(lines[index + 1] ?? "");
+      if (next) add(next[1]);
+    }
+  });
+  return values;
+}
+
+// ---------------------------------------------------------------------------
+// Philippine VAT summary lines (the Expense Parser has no entity for these).
+// ---------------------------------------------------------------------------
+
+// The last amount on a line: "VATable Sales   299.55", "VAT 12%  35.95".
+const lineAmount = (line) => {
+  const matches = [...String(line).matchAll(/(?:₱|PHP|P)?\s*(\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2})(?!\d)/gi)];
+  return matches.length ? num(matches[matches.length - 1][1]) : undefined;
+};
+const VAT_LINE_LABELS = {
+  vatableSales: /^\s*(?:vat\s*-?\s*able(?:\s+(?:sales?|amount))?|vatable)\b/i,
+  vatExemptSales: /^\s*(?:vat\s*-?\s*exempt(?:ed)?(?:\s+sales?)?|non\s*-?\s*vat(?:\s+sales?)?)\b/i,
+  zeroRatedSales: /^\s*(?:(?:vat\s+)?zero\s*-?\s*rated(?:\s+sales?)?)\b/i,
+};
+// One clear value per label; two different printed values are left out, not chosen between.
+function labelledAmount(lines, pattern) {
+  const found = new Set();
+  for (const line of lines) {
+    if (pattern.test(line)) {
+      const amount = lineAmount(line);
+      if (amount !== undefined) found.add(amount);
+    }
+  }
+  return found.size === 1 ? [...found][0] : undefined;
+}
+const VAT_AMOUNT_LINE = /^\s*(?:(?:12\s*%\s*)?vat(?:\s*\(?\s*12\s*%\s*\)?)?(?:\s+amount)?|total\s+vat)\s*[:₱]?\s*(?:php\s*)?[\d.,\s]+$/i;
+const SUBTOTAL_LINE = /^\s*sub\s*-?\s*total\b/i;
+const TOTAL_LINE = /^\s*(?:grand\s+total|total\s+amount(?:\s+due)?|total\s+due|amount\s+due|total)\b(?!\s+(?:items?|qty|quantity|vat|tax|discount|sales))/i;
 
 // Receipt summary lines that are not purchased items (subtotal, VAT, discounts,
 // totals, payment and change). Compared against the whole label, so an item
@@ -104,22 +165,25 @@ const SUMMARY_LABEL = new RegExp(
   "^(?:" +
     [
       "sub ?total",
-      "vat(?:able)?(?: sales)?",
-      "vat (?:amount|inclusive|exclusive)",
-      "vat exempt(?: sales)?",
-      "zero rated(?: sales)?",
+      "vat(?:able)?(?: sales| amount)?",
+      "vat (?:amount|inclusive|exclusive|sales)",
+      "vat exempt(?:ed)?(?: sales)?",
+      "non vat(?:able)?(?: sales)?",
+      "(?:vat )?zero rated(?: sales)?",
       "less(?: vat)?",
       "(?:total )?(?:vat|tax|taxes)",
       "sales tax",
-      "(?:senior citizen |senior |sc |pwd |employee |promo )?discount",
-      "(?:grand )?total(?: amount| due| sales| payable)?",
-      "amount (?:due|payable)",
+      "(?:less )?(?:senior citizen |senior |sc |pwd |sc pwd |employee |promo )?discount",
+      "(?:grand )?total(?: amount(?: due)?| due| sales| payable| items?| qty| quantity| payment)?",
+      "amount (?:due|payable|tendered|received|paid)",
       "balance(?: due)?",
-      "change",
-      "cash(?: tendered)?",
+      "change(?: due)?",
+      "cash(?: tendered| received)?",
       "tendered",
       "service charge",
       "net (?:amount|sales|total)",
+      "(?:no |number )?of items?",
+      "items?",
     ].join("|") +
     ")$",
   "i",
@@ -205,6 +269,29 @@ export function normalizeDocumentAiDocument(doc, { dateOrder = "DMY" } = {}) {
   set("discount", first("discount_amount", "discount"), discount !== undefined ? Math.abs(discount) : undefined);
   set("amount", best.total_amount, total?.amount);
 
+  // Fields read from the OCR text by their printed label, not by the parser. Each
+  // has confidence 0 ("Needs review"), so the employee checks it against the receipt.
+  const textFallbackFields = [];
+  const ocrTextLines = String(ocrText ?? "").split(/\r?\n/);
+  const fromLabel = (field, value) => {
+    if (expense[field] !== undefined || value === undefined) return;
+    expense[field] = value;
+    confidence[field] = 0;
+    textFallbackFields.push(field);
+  };
+  fromLabel("amount", labelledAmount(ocrTextLines, TOTAL_LINE));
+  fromLabel("subtotal", labelledAmount(ocrTextLines, SUBTOTAL_LINE));
+  fromLabel("tax", labelledAmount(ocrTextLines, VAT_AMOUNT_LINE));
+
+  // VATable, exempt and zero-rated figures, kept apart from purchases and from the
+  // subtotal. Absent when not printed: never assumed to be zero.
+  const vatBreakdown = {};
+  for (const [field, pattern] of Object.entries(VAT_LINE_LABELS)) {
+    const value = labelledAmount(ocrTextLines, pattern);
+    if (value !== undefined) vatBreakdown[field] = value;
+  }
+  if (Object.keys(vatBreakdown).length) expense.vatBreakdown = vatBreakdown;
+
   // Currency, from the first clear evidence: the currency entity's normalized
   // value, its printed text ("PHP", "₱"), the total's currency code, then the
   // total's printed text. Nothing clear: left empty for the employee.
@@ -221,18 +308,29 @@ export function normalizeDocumentAiDocument(doc, { dateOrder = "DMY" } = {}) {
   const card = String(textOf(best.credit_card_last_four_digits) ?? "").replace(/\D/g, "");
   set("cardLastFour", best.credit_card_last_four_digits, card.length >= 4 ? card.slice(-4) : undefined);
 
+  const flags = [];
   const receiptNumberEntity = first(...RECEIPT_NUMBER_TYPES);
-  set("receiptNumber", receiptNumberEntity, str(textOf(receiptNumberEntity), 100));
+  const providerReceiptNumber = str(textOf(receiptNumberEntity), 100);
+  // A date, phone number, TIN or card number the parser labelled as the receipt
+  // number is not used.
+  const providerNumberUsable =
+    providerReceiptNumber !== undefined && !looksLikeNotAReceiptNumber(providerReceiptNumber.replace(/\s+/g, ""));
+  if (providerNumberUsable) set("receiptNumber", receiptNumberEntity, providerReceiptNumber);
+  else if (providerReceiptNumber !== undefined) flags.push({ code: "receipt_number_rejected", message: "The value read as the receipt number looks like a date, phone, TIN or card number, so it was not used." });
   // The Expense Parser has no OR/SI number field: fall back to a value printed
   // after an explicit label. Confidence 0 = "Needs review": the employee confirms it.
-  const textFallbackFields = [];
+  const printedNumbers = receiptNumbersInText(ocrText);
   if (expense.receiptNumber === undefined) {
-    const fromText = receiptNumberFromText(ocrText);
+    const fromText = printedNumbers.size === 1 ? [...printedNumbers][0] : undefined;
     if (fromText) {
       expense.receiptNumber = fromText;
       confidence.receiptNumber = 0;
       textFallbackFields.push("receiptNumber");
+    } else if (printedNumbers.size > 1) {
+      flags.push({ code: "receipt_number_ambiguous", message: "The receipt shows more than one receipt/invoice number. Enter the correct one." });
     }
+  } else if (printedNumbers.size && !printedNumbers.has(String(expense.receiptNumber).toUpperCase())) {
+    flags.push({ code: "receipt_number_conflict", message: "The receipt number read by OCR differs from the number printed next to its label. Check it against the receipt." });
   }
 
   // Line items: parent "line_item" entities with "line_item/..." properties.
@@ -283,12 +381,20 @@ export function normalizeDocumentAiDocument(doc, { dateOrder = "DMY" } = {}) {
     ...confidence,
     ...(providerDateScore !== undefined && "expenseDate" in confidence ? { expenseDate: providerDateScore } : {}),
   };
-  // Values read by ReceiptFlow from the text are not provider scores.
+  // Values read by ReceiptFlow from the text are not provider scores: they stay
+  // out of the average. A key field keeps its 0, so the employee must confirm it.
   for (const field of textFallbackFields) delete providerConfidence[field];
   const scores = Object.values(providerConfidence);
+  if (textFallbackFields.includes("amount")) providerConfidence.amount = 0;
   const entityTypes = [...new Set(entities.map((e) => e?.type).filter(Boolean))].sort();
+  for (const issue of receiptConsistencyIssues(expense)) flags.push(issue);
+  const missingFields = IMPORTANT_FIELDS.filter((field) => !hasValue(expense, field));
   const ocrMeta = {
     provider: "google_document_ai",
+    normalizerVersion: NORMALIZER_VERSION,
+    // Ambiguous or inconsistent figures for a person to check, and what was not read.
+    flags,
+    missingFields,
     providerDocumentId: undefined,
     fieldsExtracted: Object.keys(expense.originalOCR),
     averageConfidence: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 1000) / 1000 : undefined,
@@ -320,6 +426,8 @@ export function normalizeDocumentAiDocument(doc, { dateOrder = "DMY" } = {}) {
     total_tax_amount: moneyOf(best.total_tax_amount)?.amount,
     tip_amount: moneyOf(best.tip_amount)?.amount,
     total_amount: total?.amount,
+    vat_breakdown: expense.vatBreakdown,
+    text_fallback_fields: textFallbackFields,
     payment_type: textOf(best.payment_type),
     line_item_count: expense.lineItems.length,
     confidence,

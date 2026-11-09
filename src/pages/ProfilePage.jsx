@@ -149,6 +149,8 @@ export function ProfilePage() {
             {(user.role === "FINANCE_ADMIN" || !authenticated) && (
               <Link to="/categories">Category policies</Link>
             )}
+            {user.managementAccess && <Link to="/management">Management</Link>}
+            {authenticated && <Link to="/notifications">Notifications</Link>}
           </div>
         </section>
       </div>

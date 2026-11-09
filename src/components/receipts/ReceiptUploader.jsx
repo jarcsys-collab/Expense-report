@@ -17,14 +17,16 @@ import {
 } from "lucide-react";
 import { useUploadQueue } from "../../hooks/useUploadQueue";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { imageTools, transformImage } from "../../utils/image";
+import { imageTools } from "../../utils/image";
+import { prepareReceiptFile } from "../../utils/receiptImage";
 import { validateReceiptFile } from "../../utils/receiptFile";
 import { Modal } from "../common/Modal";
 import { Spinner } from "../common/Spinner";
 import { FileThumbnail } from "./FileThumbnail";
+import { ReceiptPrepareModal } from "./ReceiptPrepareModal";
 
 export function ReceiptUploader() {
-  const { notify } = useWorkspace();
+  const { notify, user } = useWorkspace();
   const navigate = useNavigate();
   const location = useLocation();
   const [scanOptionsOpen, setScanOptionsOpen] = useState(false);
@@ -50,22 +52,43 @@ export function ReceiptUploader() {
   const [sections, setSections] = useState([]);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState();
-  const [trim, setTrim] = useState(0);
-  const [editingUrl, setEditingUrl] = useState("");
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (editingIndex === undefined || !sections[editingIndex]) {
-      setEditingUrl("");
-      return;
+  const [startingScan, setStartingScan] = useState(false);
+  // Files waiting for the employee to check them; nothing is uploaded before that.
+  const [pending, setPending] = useState({ files: [], index: 0 });
+  const currentPending = pending.files[pending.index];
+  function reviewFiles(files) {
+    const accepted = [];
+    for (const file of files) {
+      try {
+        validateReceiptFile(file, { allowOversizedImage: true });
+        accepted.push(file);
+      } catch (error) {
+        notify(error.message, true);
+      }
     }
-    const objectUrl = URL.createObjectURL(sections[editingIndex]);
-    setEditingUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [editingIndex, sections]);
+    if (accepted.length) setPending({ files: accepted, index: 0 });
+  }
+  function nextPending() {
+    setPending((current) => (current.index + 1 < current.files.length ? { ...current, index: current.index + 1 } : { files: [], index: 0 }));
+  }
+  async function startSections() {
+    if (startingScan) return;
+    setStartingScan(true);
+    try {
+      const prepared = await Promise.all(sections.map(async (section) => (await prepareReceiptFile(section, {}, { acceptsHeic: user.ocrAcceptsHeic })).file));
+      addFiles(prepared, true);
+      setCaptureOpen(false);
+      setSections([]);
+    } catch (error) {
+      notify(error.message, true);
+    } finally {
+      setStartingScan(false);
+    }
+  }
   async function addSections(files) {
     for (const file of files)
       try {
-        validateReceiptFile(file);
+        validateReceiptFile(file, { allowOversizedImage: true });
         (await imageTools.analyze(file)).forEach((item) => notify(item));
         setSections((current) => [...current, file]);
       } catch (error) {
@@ -96,7 +119,7 @@ export function ReceiptUploader() {
         onDrop={(event) => {
           event.preventDefault();
           setDragging(false);
-          addFiles([...event.dataTransfer.files]);
+          reviewFiles([...event.dataTransfer.files]);
         }}
       >
         <div className="dropzone">
@@ -194,12 +217,12 @@ export function ReceiptUploader() {
                   </button>
                 </div>
                 <div
-                  className={`progress ${!item.expense && item.status !== "Failed" ? "indeterminate" : ""}`}
+                  className={`progress ${!item.expense && item.status !== "Failed" && !(item.status === "Uploading" && item.progress > 0) ? "indeterminate" : ""}`}
                   role="progressbar"
                   aria-label={`${item.files[0].name}: ${item.status}`}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  aria-valuenow={item.expense ? 100 : undefined}
+                  aria-valuenow={item.expense ? 100 : item.status === "Uploading" ? item.progress : undefined}
                 >
                   <i
                     style={{
@@ -269,7 +292,7 @@ export function ReceiptUploader() {
         accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.pdf"
         multiple
         onChange={(event) => {
-          addFiles(Array.from(event.target.files || []));
+          reviewFiles(Array.from(event.target.files || []));
           event.target.value = "";
         }}
       />
@@ -385,10 +408,7 @@ export function ReceiptUploader() {
                 </button>
                 <button
                   className="text-button"
-                  onClick={() => {
-                    setEditingIndex(index);
-                    setTrim(0);
-                  }}
+                  onClick={() => setEditingIndex(index)}
                 >
                   Preview / edit
                 </button>
@@ -432,119 +452,39 @@ export function ReceiptUploader() {
             </button>
             <button
               className="button primary"
-              disabled={!sections.length}
-              onClick={() => {
-                addFiles(sections, true);
-                setCaptureOpen(false);
-                setSections([]);
-              }}
+              disabled={!sections.length || startingScan}
+              onClick={startSections}
             >
-              <Upload size={16} />
+              {startingScan ? <Spinner /> : <Upload size={16} />}
               Start scan
             </button>
           </footer>
         </Modal>
       )}
       {editingIndex !== undefined && sections[editingIndex] && (
-        <Modal title="Review photo" onClose={() => setEditingIndex(undefined)}>
-          <div className="capture-preview">
-            <img
-              src={editingUrl}
-              alt="Captured receipt"
-              style={{
-                clipPath: `inset(${trim * 100}%)`,
-              }}
-            />
-          </div>
-          <label className="field">
-            Trim edges ({Math.round(trim * 100)}%)
-            <input
-              type="range"
-              min="0"
-              max="0.2"
-              step=".01"
-              value={trim}
-              onChange={(event) => setTrim(Number(event.target.value))}
-            />
-          </label>
-          <p className="muted">
-            Trim applies evenly to each edge. Check that receipt text remains
-            visible.
-          </p>
-          <footer>
-            <button
-              className="button"
-              onClick={() => {
-                setSections((current) =>
-                  current.filter((item, index) => index !== editingIndex),
-                );
-                setEditingIndex(undefined);
-                cameraInputRef.current?.click();
-              }}
-            >
-              Retake
-            </button>
-            <button
-              className="button"
-              disabled={editing}
-              onClick={async () => {
-                setEditing(true);
-                try {
-                  const rotated = await transformImage(
-                    sections[editingIndex],
-                    90,
-                  );
-                  setSections((current) =>
-                    current.map((item, index) =>
-                      index === editingIndex ? rotated : item,
-                    ),
-                  );
-                } catch {
-                  notify(
-                    "This format cannot be rotated in your browser. Use the original or retake.",
-                    true,
-                  );
-                } finally {
-                  setEditing(false);
-                }
-              }}
-            >
-              <RotateCw size={16} />
-              Rotate
-            </button>
-            <button
-              className="button primary"
-              disabled={editing}
-              onClick={async () => {
-                setEditing(true);
-                try {
-                  if (trim) {
-                    const cropped = await transformImage(
-                      sections[editingIndex],
-                      0,
-                      trim,
-                    );
-                    setSections((current) =>
-                      current.map((item, index) =>
-                        index === editingIndex ? cropped : item,
-                      ),
-                    );
-                  }
-                  setEditingIndex(undefined);
-                } catch {
-                  notify(
-                    "Unable to crop this format. Continue with the original.",
-                    true,
-                  );
-                } finally {
-                  setEditing(false);
-                }
-              }}
-            >
-              Use Photo
-            </button>
-          </footer>
-        </Modal>
+        <ReceiptPrepareModal
+          file={sections[editingIndex]}
+          acceptsHeic={user.ocrAcceptsHeic}
+          confirmLabel="Use photo"
+          onCancel={() => setEditingIndex(undefined)}
+          onConfirm={(prepared) => {
+            setSections((current) => current.map((item, index) => (index === editingIndex ? prepared : item)));
+            setEditingIndex(undefined);
+          }}
+        />
+      )}
+      {currentPending && (
+        <ReceiptPrepareModal
+          key={`${currentPending.name}-${pending.index}`}
+          file={currentPending}
+          acceptsHeic={user.ocrAcceptsHeic}
+          position={pending.files.length > 1 ? { index: pending.index + 1, total: pending.files.length } : undefined}
+          onCancel={nextPending}
+          onConfirm={(prepared) => {
+            addFiles([prepared]);
+            nextPending();
+          }}
+        />
       )}
     </>
   );

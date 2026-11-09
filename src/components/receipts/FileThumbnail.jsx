@@ -9,7 +9,7 @@ export function FileThumbnail({ file }) {
     setUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [file]);
-  return failed ? (
+  return failed || !url ? (
     <FileImage size={24} />
   ) : (
     <img

@@ -40,6 +40,8 @@ For local development without signing in, set `DEV_AUTH_ENABLED=true` in `server
 | POST | `/api/receipts/upload` | multipart field `receipt`; Veryfi OCR → normalized expense + anomaly report |
 | GET | `/api/receipts/:jobId/status` | OCR job polling |
 | GET | `/api/violations` | expenses with findings (Expense Issues page) |
+| GET, POST | `/api/notifications`, `/unread-count`, `/:id/read`, `/read-all` | the signed-in person's own notifications |
+| * | `/api/management/*` | catalog, directory, notification rules (+ test), delivery history, audit, OCR analytics; administrators only |
 | POST | `/api/auth/entra` | Microsoft sign-in: verified ID token (+ Graph token) → ReceiptFlow session |
 | POST | `/api/auth/login` | TEMPORARY beta sign-in (fallback) |
 | GET / POST | `/api/auth/session`, `/api/auth/logout` | session check used by the frontend |
@@ -162,6 +164,88 @@ employee saves it (Save Draft, available at every step once the receipt is read,
   Approved and Reimbursed count).
 
 Abandoned incomplete drafts are not deleted automatically.
+
+## Scanning a receipt
+
+Choosing or photographing a receipt only opens a preview (`ReceiptPrepareModal`); nothing leaves
+the device until the employee chooses **Scan receipt**. There they can rotate, crop (drag an edge or
+use the arrow keys) and optionally enhance it. Photos use the browser's own file capture
+(`capture="environment"`), so no camera permission is requested. An unedited photo up to 3 MB is uploaded
+byte for byte; larger or edited ones are re-encoded as JPEG, keeping small text readable. The server's
+10 MB limit is unchanged. Google OCR cannot read HEIC: it is converted when the browser can decode it,
+and otherwise the preview explains what to do.
+
+**Philippine receipts.** `documentAiNormalizer.js` also reads VATable, VAT-exempt and zero-rated figures
+from their printed labels (`vatBreakdown`; absent when not printed, never assumed zero), and a total,
+subtotal or VAT the parser missed. Anything read from the text has confidence 0, so it needs checking.
+`receiptConsistency.js` compares the VAT figures with each other and the total; a mismatch is reported by
+`unclear_or_inconsistent_details` and no value is changed. `ocrQuality` records how each field ended up:
+extracted, confirmed, corrected, provided or missing.
+
+**Duplicate uploads** (the file) are separate from **duplicate claims** (the expense check, unchanged).
+All lookups use the SHA-256 of the file and are limited to the uploader's own account:
+
+1. Double click, retry or a scan still running: answered from that scan. A unique `inFlightKey` lets only
+   one concurrent upload reach Google.
+2. The same file scanned earlier (`OCR_REUSE_PRIOR_SCAN_DAYS`): the reading is reused without a new OCR
+   request, in a scan record of its own, so the second expense still gets the duplicate-claim check.
+3. Otherwise a new reading. Other employees' scans are never consulted, so an identical file from another
+   employee is read and stored separately and neither employee learns of the other.
+
+An edited copy of a photo has different bytes, so it counts as a new file; the claim check still catches it.
+
+## Management
+
+`#/management`. **Temporary business decision:** every employee signed in with Microsoft may manage notification
+rules and recipients, and see delivery and audit history. OCR analytics stays with `FINANCE_ADMIN`, because it shows
+each employee's activity. The shared beta account is refused whatever `BETA_AUTH_ROLE` says: its changes could not be
+attributed to a person. To restore a restriction, change one line in the `MANAGEMENT_POLICY` table
+(`server/src/middleware/managementAccess.js`), e.g. `rules: ["FINANCE_ADMIN"]`; routes and session flags follow it.
+Who can open which expense is unchanged, and the user's record is re-read on every Management request.
+
+**Notification rules** say who is told when an anomaly is found. They never change an expense or its
+status, and are unrelated to approval routing (`APPROVAL_WORKFLOW_ENABLED`).
+
+Anomaly found → matching enabled rules → recipients resolved from `users` → idempotency key → outbox
+(`notificationEvents`) → delivered by the worker (`services/notifications/outbox.js`) → retried with backoff,
+up to 5 attempts. The same anomaly in the same state is notified once per person; a materially different one
+notifies again. A failure here is logged and never stops the expense being saved.
+
+| Setting | Now |
+| --- | --- |
+| `NOTIFICATIONS_ENABLED` | Off by default: rules can be prepared, nothing is queued |
+| In-app | Works: the bell and `#/notifications` |
+| Email | Not connected. `NOTIFICATION_EMAIL_PROVIDER=mock` records only and is ignored in production |
+| Employee's manager | Requires configuration: ReceiptFlow holds no manager data, so the API refuses it |
+
+Notifications hold only the request number, anomaly name and severity. Recipients who are not Finance cannot
+open another employee's request: they get no link, and the expense routes still answer 404. Delivery history shows a
+request number only to people who may open that request.
+
+**Test** on a rule sends made-up details and touches no expense. Outside production it is recorded with a mock
+provider and reaches nobody. In production it needs explicit confirmation and is labelled TEST. Tests are listed
+apart from real notifications.
+
+**OCR analytics** come from `ocrScanEvents` (no receipt content) and `ocrQuality`, starting from deployment;
+earlier scans are not counted. Costs are **estimates** at the configured list price, not Google Cloud billing data.
+Failed requests are not billed by Google. A request that timed out on our side is shown as "billing unknown".
+
+**Audit history** (`managementAudit`) records every rule change and test, with before and after values.
+
+To try all of this safely: `cd server && E2E_ROLE=FINANCE_ADMIN node scripts/local-e2e-server.js`, then `npm run dev`.
+It uses a throwaway in-memory database and a stub instead of Google.
+
+## Tests
+
+```sh
+npm test                 # frontend logic
+cd server && npm test    # backend and API integration, on a throwaway in-memory MongoDB
+npm run test:e2e         # the real app in the installed Edge or Chrome
+```
+
+`test:e2e` starts its own API and frontend on ports 3199 and 5199 with a throwaway database and a stub instead of
+Google, runs as a Finance administrator and then as an ordinary employee, and stops them. Screenshots go to
+`test-results/e2e`. Set `E2E_BROWSER` (`msedge`, `chrome`) or `E2E_BROWSER_PATH` to choose the browser.
 
 ## Current limitations
 
