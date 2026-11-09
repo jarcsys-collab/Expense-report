@@ -271,6 +271,10 @@ frontend calls the endpoints, and the API answers `404 NOT_FOUND`.
    which also depends on receipt file storage above.
 6. **Resolve finding** (Expense Issues page): `POST /api/expenses/:id/violations/:violationId/resolve`.
 
+## Staging
+
+Setup, safeguards and the test plan are in `docs/staging.md`. Staging never shares production's database or services.
+
 ## Deploy backend (Railway)
 
 - Service **Root Directory**: `/server`. Railpack reads `server/railpack.json` (Node provider,
