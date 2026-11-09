@@ -261,11 +261,21 @@ const testLimiter = rateLimit({
 });
 const testSchema = z.object({ confirm: z.boolean().default(false) }).strict();
 
+// While notifications are off (NOTIFICATIONS_ENABLED false or unset), nothing is sent,
+// tests included. Checked first: a refused request reads nothing, writes nothing and
+// does not use up the sender's rate limit.
+function requireNotificationsEnabled(req, res, next) {
+  if (!env.notifications.enabled) {
+    throw new HttpError(409, "NOTIFICATIONS_DISABLED", "Test notifications are unavailable because notifications are switched off on this server. Nothing was sent.");
+  }
+  next();
+}
+
 // POST /api/management/notification-rules/:id/test
 // Made-up details only: no expense is read, created or changed. Outside production
 // nothing reaches anyone (recorded through the mock provider). In production it needs
 // { confirm: true } and goes to the rule's recipients, clearly labelled TEST.
-managementRouter.post("/notification-rules/:id/test", testLimiter, validateObjectId(), validate({ body: testSchema }), async (req, res) => {
+managementRouter.post("/notification-rules/:id/test", requireNotificationsEnabled, testLimiter, validateObjectId(), validate({ body: testSchema }), async (req, res) => {
   const rule = await findRule(req.params.id);
   const { people, unresolved } = await resolveRecipients(rule.recipients);
   if (!people.length) {

@@ -150,6 +150,29 @@ test("approval routing stays off in the session flags and no approval controls w
   }
 });
 
+test("while notifications are off, Send test is disabled and says why", async () => {
+  const panel = await vite.ssrLoadModule("/src/components/management/RulesPanel.jsx");
+  const render = (props) => renderToStaticMarkup(react.createElement(panel.SendTestButton, { rule: { id: "1", name: "Totals" }, sending: false, onSend: () => {}, ...props }));
+  const off = render({ available: false });
+  assert.match(off, /disabled=""/);
+  assert.match(off, /title="Unavailable: notifications are switched off"/);
+  assert.match(off, /aria-describedby="notifications-off-note"/);
+  const banner = renderToStaticMarkup(react.createElement(panel.NotificationsOffBanner));
+  assert.match(banner, /id="notifications-off-note"/);
+  assert.match(banner, /test notifications can’t be sent/);
+});
+
+test("when notifications are on, Send test works as before", async () => {
+  const panel = await vite.ssrLoadModule("/src/components/management/RulesPanel.jsx");
+  const render = (props) => renderToStaticMarkup(react.createElement(panel.SendTestButton, { rule: { id: "1", name: "Totals" }, onSend: () => {}, ...props }));
+  const on = render({ available: true, sending: false });
+  assert.doesNotMatch(on, /disabled/);
+  assert.match(on, /title="Send a test"/);
+  assert.match(on, /aria-label="Send a test of Totals"/);
+  assert.doesNotMatch(on, /aria-describedby/);
+  assert.match(render({ available: true, sending: true }), /disabled=""/, "still disabled while one is being sent");
+});
+
 const bucket = (day, scans, estimatedCostUsd) => ({ start: `${day}T00:00:00.000Z`, scans, estimatedCostUsd });
 
 test("the chart shows one measure, labelled, with its table", () => {

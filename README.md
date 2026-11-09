@@ -222,7 +222,7 @@ Notifications hold only the request number, anomaly name and severity. Recipient
 open another employee's request: they get no link, and the expense routes still answer 404. Delivery history shows a
 request number only to people who may open that request.
 
-**Test** on a rule sends made-up details and touches no expense. Outside production it is recorded with a mock
+**Test** on a rule is refused while `NOTIFICATIONS_ENABLED` is off (the API answers `409 NOTIFICATIONS_DISABLED` and the button is disabled). When on, it sends made-up details and touches no expense. Outside production it is recorded with a mock
 provider and reaches nobody. In production it needs explicit confirmation and is labelled TEST. Tests are listed
 apart from real notifications.
 

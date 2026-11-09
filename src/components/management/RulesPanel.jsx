@@ -11,6 +11,34 @@ import { TableSkeleton } from "../common/TableSkeleton";
 import { RuleForm } from "./RuleForm";
 
 const CHANNEL_LABEL = { in_app: "In-app", email: "Email" };
+const NOTIFICATIONS_OFF_NOTE = "notifications-off-note";
+
+export function NotificationsOffBanner() {
+  return (
+    <div className="management-banner" role="status" id={NOTIFICATIONS_OFF_NOTE}>
+      <TriangleAlert size={18} aria-hidden="true" />
+      <p>
+        <strong>Notifications are switched off on this server.</strong> You can set up rules now, but nothing is queued or delivered, and test notifications can’t be sent, until an administrator sets NOTIFICATIONS_ENABLED.
+      </p>
+    </div>
+  );
+}
+
+// `available` comes from the server's catalog. The server refuses a test either way.
+export function SendTestButton({ rule, available, sending, onSend }) {
+  return (
+    <button
+      className="icon-button"
+      aria-label={`Send a test of ${rule.name}`}
+      aria-describedby={available ? undefined : NOTIFICATIONS_OFF_NOTE}
+      title={available ? "Send a test" : "Unavailable: notifications are switched off"}
+      disabled={!available || sending}
+      onClick={() => onSend(rule)}
+    >
+      <Send size={16} aria-hidden="true" />
+    </button>
+  );
+}
 
 export function RulesPanel() {
   const { notify } = useWorkspace();
@@ -65,14 +93,7 @@ export function RulesPanel() {
 
   return (
     <>
-      {!catalog.delivery.notificationsEnabled && (
-        <div className="management-banner" role="status">
-          <TriangleAlert size={18} aria-hidden="true" />
-          <p>
-            <strong>Notifications are switched off on this server.</strong> You can set up rules now, but nothing is queued or delivered until an administrator sets NOTIFICATIONS_ENABLED.
-          </p>
-        </div>
-      )}
+      {!catalog.delivery.notificationsEnabled && <NotificationsOffBanner />}
       <div className="management-toolbar">
         <div className="search">
           <Search size={16} aria-hidden="true" />
@@ -174,9 +195,7 @@ export function RulesPanel() {
                       <button className="icon-button" aria-label={`Edit ${rule.name}`} title="Edit" onClick={() => setEditing(ruleToDraft(rule))}>
                         <Pencil size={16} aria-hidden="true" />
                       </button>
-                      <button className="icon-button" aria-label={`Send a test of ${rule.name}`} title="Send a test" disabled={testing === rule.id} onClick={() => startTest(rule)}>
-                        <Send size={16} aria-hidden="true" />
-                      </button>
+                      <SendTestButton rule={rule} available={catalog.delivery.notificationsEnabled} sending={testing === rule.id} onSend={startTest} />
                       <button className="icon-button" aria-label={`Delete ${rule.name}`} title="Delete" onClick={() => setDeleting(rule)}>
                         <Trash2 size={16} aria-hidden="true" />
                       </button>
