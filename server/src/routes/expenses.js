@@ -85,8 +85,8 @@ async function findReceiptJob(receiptJobId) {
 
 // Linking a receipt scan to an expense: only the account that uploaded it may
 // link it. The file details recorded on the expense come from the scan itself.
-// The original image/PDF is not stored by ReceiptFlow (only these details and
-// the OCR job), so the file entry has no URL.
+// The original image/PDF stays with the scan in GridFS (never public), so the file
+// entry has no URL: GET /api/expenses/:id/receipt serves it after an access check.
 function linkReceiptJob(expense, job, user) {
   if (job.uploadedBy && job.uploadedBy !== user.id) {
     throw new HttpError(403, "RECEIPT_JOB_FORBIDDEN", "This receipt scan was uploaded by another account.");

@@ -430,7 +430,7 @@ export function ReviewPage() {
               )}
               {expense.receiptFiles[fileIndex] ? (
                 <>
-                  <ReceiptViewer file={expense.receiptFiles[fileIndex]} expenseId={expense.id} />
+                  <ReceiptViewer file={expense.receiptFiles[fileIndex]} expense={expense} />
                   {expense.receiptFiles[fileIndex].mimeType.startsWith(
                     "image/",
                   ) && (

@@ -6,14 +6,13 @@ const formatSize = (bytes) =>
     ? `${(bytes / 1048576).toFixed(1)} MB`
     : `${Math.max(0.1, bytes / 1024).toFixed(1)} KB`;
 
-// Whether ReceiptFlow can show the original file right now. Saved expenses
-// keep only file details and the OCR scan, so their files have no link.
+// Whether the file entry has its own web link. A scanned receipt has none: its
+// original is kept with the scan and loaded through the API (ReceiptViewer).
 export const hasStoredFile = (file) => /^https?:\/\//.test(file?.url || "");
 const hasPreview = (file) => /^(https?:|blob:|data:)/.test(file?.url || "");
 
 // What receipt this expense is linked to: the file details, the OCR scan and
-// whether the original image/PDF is kept. ReceiptFlow does not store original
-// receipt files yet, and this says so instead of offering a broken link.
+// where the original image/PDF can be found.
 export function ReceiptAssociation({ expense }) {
   const files = expense.receiptFiles;
   if (!files.length && !expense.receiptJobId) {

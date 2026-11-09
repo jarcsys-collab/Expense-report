@@ -13,10 +13,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { api } from "../../services/api";
 import { downloadReceipt } from "../../services/receiptFiles";
 import { EDITABLE_STATUSES } from "../../config/constants";
-
-// The file entry of the receipt scan (no browser URL): opened from the server.
-const isScanFile = (file, expense) =>
-  Boolean(expense.receiptJobId) && file.id === `job-${expense.receiptJobId}` && !/^https?:\/\//.test(file.url || "");
+import { isStoredScanFile as isScanFile } from "../../utils/receiptSource";
 
 // Opens the stored original receipt in a new tab (fetched with the session).
 async function openScannedReceipt(expenseId) {
@@ -303,12 +300,20 @@ export function ExpenseDrawer({ base: basePath = "/requests" }) {
                           <small>Original file not stored</small>
                         )}
                         {isScanFile(file, expense) && (
-                          <button
-                            className="text-button"
-                            onClick={() => void run(() => openScannedReceipt(expense.id))}
-                          >
-                            Open original receipt
-                          </button>
+                          <>
+                            <button
+                              className="text-button"
+                              onClick={() => setPreviewFile(file)}
+                            >
+                              Preview
+                            </button>
+                            <button
+                              className="text-button"
+                              onClick={() => void run(() => openScannedReceipt(expense.id))}
+                            >
+                              Open original receipt
+                            </button>
+                          </>
                         )}
                         <div className="file-actions">
                           {hasStoredFile(file) && (
@@ -418,6 +423,7 @@ export function ExpenseDrawer({ base: basePath = "/requests" }) {
       {previewFile && (
         <ReceiptPreviewModal
           file={previewFile}
+          expense={expense}
           onClose={() => setPreviewFile(undefined)}
         />
       )}

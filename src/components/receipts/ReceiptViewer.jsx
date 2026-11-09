@@ -9,47 +9,52 @@ import {
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { downloadReceipt, openReceipt } from "../../services/receiptFiles";
 import { api } from "../../services/api";
+import { describeReceiptLoadFailure, isStoredScanFile } from "../../utils/receiptSource";
 
-// The scan file of a saved expense has no browser link: its stored original is
-// loaded through the API (with the session), if the server kept it.
-const isStoredScanFile = (file, expenseId) =>
-  /^[a-f0-9]{24}$/i.test(String(expenseId ?? "")) &&
-  /^job-/.test(file?.id || "") &&
-  !/^(https?:|blob:|data:)/.test(file?.url || "");
-
-export function ReceiptViewer({ file, expenseId }) {
-  const fromServer = isStoredScanFile(file, expenseId);
-  const [stored, setStored] = useState({ url: "", loading: fromServer });
+// `expense` is the expense the file belongs to. Without it (or for an expense not
+// saved yet) the file is shown from its own link.
+export function ReceiptViewer({ file, expense }) {
+  const fromServer = isStoredScanFile(file, expense);
+  const [attempt, setAttempt] = useState(0);
+  // A result only counts for the load it came from, so changing file never shows
+  // the previous file's image or error.
+  const loadKey = fromServer ? `${expense.id}:${file.id}:${attempt}` : "";
+  const [stored, setStored] = useState({ key: "", url: "", failure: null });
   useEffect(() => {
-    if (!fromServer) return undefined;
+    if (!loadKey) return undefined;
     let cancelled = false;
     let objectUrl = "";
-    setStored({ url: "", loading: true });
-    api.getReceiptFile(expenseId).then(
+    api.getReceiptFile(expense.id).then(
       (blob) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
-        setStored({ url: objectUrl, loading: false });
+        setStored({ key: loadKey, url: objectUrl, failure: null });
       },
-      // Not kept (older scans) or not available: the "not stored" view below.
-      () => !cancelled && setStored({ url: "", loading: false }),
+      (error) => {
+        if (!cancelled) setStored({ key: loadKey, url: "", failure: describeReceiptLoadFailure(error) });
+      },
     );
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [fromServer, expenseId, file?.id]);
-  if (fromServer && stored.loading) {
-    return (
-      <div className="receipt-view">
-        <div className="receipt-canvas receipt-not-stored" role="status">
-          <p>Loading the original receipt…</p>
-        </div>
-        <small className="muted">{file.name}</small>
+  }, [loadKey]);
+  if (!fromServer) return <ReceiptFileViewer file={file} />;
+  const current = stored.key === loadKey ? stored : null;
+  if (current?.url) return <ReceiptFileViewer file={{ ...file, url: current.url }} />;
+  return (
+    <div className="receipt-view">
+      <div className="receipt-canvas receipt-not-stored" role={current ? "alert" : "status"}>
+        <p>{current ? current.failure.message : "Loading the original receipt…"}</p>
+        {current?.failure.canRetry && (
+          <button type="button" className="button" onClick={() => setAttempt((value) => value + 1)}>
+            Try again
+          </button>
+        )}
       </div>
-    );
-  }
-  return <ReceiptFileViewer file={stored.url ? { ...file, url: stored.url } : file} />;
+      <small className="muted">{file.name}</small>
+    </div>
+  );
 }
 
 function ReceiptFileViewer({ file }) {
@@ -63,20 +68,32 @@ function ReceiptFileViewer({ file }) {
     setRotation(0);
   }, [file.id]);
   const isPdf = file.mimeType === "application/pdf";
-  // Saved expenses keep only the file details (the original is not stored).
+  // A file entry with no link and no receipt scan behind it: only its details exist.
   if (!/^(https?:|blob:|data:)/.test(file.url || "")) {
     return (
       <div className="receipt-view">
         <div className="receipt-canvas receipt-not-stored">
           <p>
-            Original receipt not stored. ReceiptFlow keeps the file details and
-            the scanned data only.
+            Original receipt not stored. Only the file details were saved for
+            this attachment.
           </p>
         </div>
         <small className="muted">{file.name}</small>
       </div>
     );
   }
+  const pdfFallback = (
+    <p>
+      PDF preview unavailable.{" "}
+      <button
+        type="button"
+        className="text-button"
+        onClick={() => void run(() => openReceipt(file))}
+      >
+        Open PDF
+      </button>
+    </p>
+  );
   return (
     <div className="receipt-view">
       <div className="preview-toolbar">
@@ -139,17 +156,14 @@ function ReceiptFileViewer({ file }) {
       </div>
       <div className="receipt-canvas">
         {isPdf ? (
-          <object data={file.url} type="application/pdf" aria-label={file.name}>
-            <p>
-              PDF preview unavailable.{" "}
-              <button
-                className="text-button"
-                onClick={() => void run(() => openReceipt(file))}
-              >
-                Open PDF
-              </button>
-            </p>
-          </object>
+          // Most phone browsers cannot show a PDF inside a page: offer it directly.
+          navigator.pdfViewerEnabled === false ? (
+            pdfFallback
+          ) : (
+            <object data={file.url} type="application/pdf" aria-label={file.name}>
+              {pdfFallback}
+            </object>
+          )
         ) : previewFailed ? (
           <p>
             This image format cannot be previewed here. Use Open Original or
