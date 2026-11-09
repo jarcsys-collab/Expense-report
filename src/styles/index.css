@@ -3372,6 +3372,8 @@ summary {
   color: var(--theme-muted);
   text-align: center;
   place-items: center;
+  align-content: center;
+  gap: 12px;
   min-height: 160px;
   padding: 20px;
   font-size: 12px;

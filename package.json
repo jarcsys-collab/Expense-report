@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "node --test --test-reporter=spec \"tests/**/*.test.mjs\"",
     "test:e2e": "node tests/e2e/run.mjs",
+    "test:e2e:receipt": "node tests/e2e/receiptPreview.mjs",
     "build:staging": "vite build --mode staging"
   },
   "dependencies": {

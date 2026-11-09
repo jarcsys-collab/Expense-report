@@ -249,9 +249,13 @@ Google, runs as a Finance administrator and then as an ordinary employee, and st
 
 ## Current limitations
 
-- **Receipt files are not stored.** ReceiptFlow saves the extracted data, the OCR job and file
-  metadata (name, type, size) only. The original receipt image/PDF is sent to Veryfi and is not
-  kept by ReceiptFlow, so reopening a saved expense cannot show the original receipt.
+- **Receipt files:** the original of each scanned receipt is kept in MongoDB GridFS (bucket
+  `receiptFiles`) and is served only through `GET /api/expenses/:id/receipt` and
+  `GET /api/receipts/:jobId/file`, after an access check. Scans made before files were kept
+  have only the extracted data and file metadata (name, type, size).
+- **Added and edited files:** "Attach receipt" and "Save edited copy" on the review screen call
+  `POST /receipts/files`, which the API does not provide yet, so they fail with an error and
+  nothing is saved.
 - **Long receipts:** uploads with several sections are rejected with
   `MULTIPLE_FILES_NOT_SUPPORTED` (one photo or one PDF per scan).
 

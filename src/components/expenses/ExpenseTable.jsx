@@ -53,7 +53,7 @@ export function ExpenseTable({
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState("date-desc");
   const [selectedIds, setSelectedIds] = useState([]);
-  const [previewFile, setPreviewFile] = useState();
+  const [preview, setPreview] = useState();
   const [pendingAction, setPendingAction] = useState();
   const pageSize = compact ? 7 : 10;
   const filtered = useMemo(
@@ -581,7 +581,7 @@ export function ExpenseTable({
                         <button
                           className="receipt-link"
                           onClick={() =>
-                            setPreviewFile(expense.receiptFiles[0])
+                            setPreview({ file: expense.receiptFiles[0], expense })
                           }
                         >
                           <FileText size={13} />
@@ -730,10 +730,11 @@ export function ExpenseTable({
           </button>
         </div>
       </div>
-      {previewFile && (
+      {preview && (
         <ReceiptPreviewModal
-          file={previewFile}
-          onClose={() => setPreviewFile(undefined)}
+          file={preview.file}
+          expense={preview.expense}
+          onClose={() => setPreview(undefined)}
         />
       )}
       {pendingAction && (
