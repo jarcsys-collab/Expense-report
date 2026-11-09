@@ -40,7 +40,7 @@ export function Sidebar() {
   const location = useLocation();
   const railRef = useRef(null);
   const toggleRef = useRef(null);
-  const navItems = getNavItems(user.role, authenticated);
+  const navItems = getNavItems(user.role, authenticated, user.managementAccess);
   // The tablet overlay only exists below the desktop breakpoint.
   const overlayOpen = expanded && !desktop;
   const open = desktop ? !collapsed : overlayOpen;

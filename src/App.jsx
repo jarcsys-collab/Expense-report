@@ -7,6 +7,8 @@ import { WorkspaceProvider } from "./context/WorkspaceContext";
 import { AssistantPage } from "./pages/AssistantPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { ExpensesPage } from "./pages/ExpensesPage";
+import { ManagementPage } from "./pages/ManagementPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { ReviewPage } from "./pages/ReviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -43,6 +45,9 @@ export function App() {
                   <Route path="review/:id" element={<ReviewPage />} />
                   <Route path="violations" element={<ViolationsPage />} />
                   <Route path="categories" element={<CategoriesPage />} />
+                  <Route path="management" element={<ManagementPage />} />
+                  <Route path="management/:section" element={<ManagementPage />} />
+                  <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="profile" element={<ProfilePage />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route

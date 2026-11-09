@@ -217,6 +217,14 @@ const expenseSchema = new Schema(
     // Low-confidence key fields and the employee's confirmations. Absent on
     // expenses without such fields (and on all older expenses).
     ocrFieldReviews: { type: [ocrFieldReviewSchema], default: undefined },
+    // VAT figures as printed on the scanned receipt (VATable, exempt, zero-rated).
+    // Server-maintained from the scan, never from the browser. Only figures that
+    // were actually printed are present: absent is not the same as zero.
+    vatBreakdown: { type: Schema.Types.Mixed },
+    // How each scanned field ended up (extracted, confirmed, corrected, provided,
+    // missing), for the review screen and OCR quality analytics. Server-maintained.
+    // Absent on manual expenses and all older expenses.
+    ocrQuality: { type: Schema.Types.Mixed },
 
     // Review and workflow
     policyViolations: { type: [violationSchema], default: [] },
@@ -247,5 +255,7 @@ const expenseSchema = new Schema(
 expenseSchema.index({ createdAt: -1 });
 expenseSchema.index({ employeeId: 1, createdAt: -1 });
 expenseSchema.index({ "employee.entraUserId": 1, createdAt: -1 }, { partialFilterExpression: { "employee.entraUserId": { $type: "string" } } });
+// OCR quality analytics: only expenses that carry a quality record are indexed.
+expenseSchema.index({ createdAt: -1, "ocrQuality.provider": 1 }, { partialFilterExpression: { ocrQuality: { $type: "object" } } });
 
 export const Expense = mongoose.model("Expense", expenseSchema);

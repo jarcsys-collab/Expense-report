@@ -13,7 +13,8 @@ const clamp = (value, min, max, fallback) => {
 };
 
 export const config = {
-  appName: "ReceiptFlow",
+  // Only the staging build sets this, so nobody mistakes staging for production.
+  appName: env.VITE_APP_NAME || "ReceiptFlow",
   defaultCurrency: "PHP",
   accountName: "JARCTECH",
   accountEmail: "",

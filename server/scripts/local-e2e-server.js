@@ -39,13 +39,17 @@ Object.assign(process.env, {
   PORT: process.env.PORT || "3000",
   MONGODB_URI: uri,
   MONGODB_DB_NAME: dbName,
-  FRONTEND_ORIGIN: "http://localhost:5173",
+  FRONTEND_ORIGIN: process.env.E2E_FRONTEND_ORIGIN || "http://localhost:5173",
   DEV_AUTH_ENABLED: "true",
   DEV_AUTH_ROLE: process.env.E2E_ROLE || "EMPLOYEE",
   BETA_AUTH_ENABLED: "false",
   ENTRA_TENANT_ID: "",
   ENTRA_CLIENT_ID: "",
   APPROVAL_WORKFLOW_ENABLED: process.env.E2E_APPROVAL_WORKFLOW === "true" ? "true" : "false",
+  // In-app notifications are safe here (throwaway database); email is the mock.
+  NOTIFICATIONS_ENABLED: process.env.E2E_NOTIFICATIONS === "false" ? "false" : "true",
+  NOTIFICATION_EMAIL_PROVIDER: "mock",
+  NOTIFICATION_WORKER_INTERVAL_SECONDS: "5",
   OCR_PROVIDER: "google_document_ai",
   GOOGLE_DOCUMENT_AI_PROJECT_ID: "local-e2e",
   GOOGLE_DOCUMENT_AI_LOCATION: "us",
@@ -77,6 +81,18 @@ const { env } = await import("../src/config/env.js");
 const { connectDatabase, disconnectDatabase } = await import("../src/config/database.js");
 const { createApp } = await import("../src/app.js");
 if (!(await connectDatabase())) throw new Error("Could not connect to the local database.");
+// Synthetic people to choose as notification recipients. The developer sign-in is one
+// of them, so it receives in-app notifications too.
+const { User } = await import("../src/models/User.js");
+const { startNotificationWorker } = await import("../src/services/notifications/outbox.js");
+for (const person of [
+  { name: "Local Developer", email: "developer@example.test", entraUserId: "dev-user", role: env.devAuthRole, department: "Development" },
+  { name: "Fay Finance", email: "fay@example.test", entraUserId: "synthetic-finance", role: "FINANCE_ADMIN", department: "Finance" },
+  { name: "Bob Employee", email: "bob@example.test", entraUserId: "synthetic-bob", role: "EMPLOYEE", department: "Service" },
+]) {
+  await User.updateOne({ entraUserId: person.entraUserId }, { $setOnInsert: person }, { upsert: true });
+}
+startNotificationWorker();
 const server = createApp().listen(env.port, () => {
   console.info(
     `[local-e2e] API on http://localhost:${env.port}/api · throwaway database "${dbName}" · role ${env.devAuthRole} · approval routing ${env.approvalWorkflowEnabled ? "ON" : "OFF"} · Google stubbed`,

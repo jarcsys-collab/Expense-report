@@ -9,6 +9,7 @@ import { PolicyExceptions } from "../components/expenses/PolicyExceptions";
 import { ImageEditModal } from "../components/receipts/ImageEditModal";
 import { DateReviewNote } from "../components/receipts/DateReviewNote";
 import { OcrFieldStatus } from "../components/receipts/OcrFieldConfirmation";
+import { OcrFieldSummary } from "../components/receipts/OcrFieldSummary";
 import { ReceiptAssociation } from "../components/receipts/ReceiptAssociation";
 import { ReceiptViewer } from "../components/receipts/ReceiptViewer";
 import { config } from "../config/appConfig";
@@ -680,6 +681,7 @@ export function ReviewPage() {
               />
               <h4 className="form-group-title">Receipt</h4>
               <ReceiptAssociation expense={expense} />
+              <OcrFieldSummary expense={expense} />
               <details className="additional-fields">
                 <summary>Additional receipt & accounting details</summary>
                 <div className="form-grid">

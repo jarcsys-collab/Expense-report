@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "watchPatterns": ["/server/**"]
+  },
+  "deploy": {
+    "startCommand": "node scripts/staging-server.js",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 90,
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

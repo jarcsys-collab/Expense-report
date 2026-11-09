@@ -71,6 +71,13 @@ export function UploadQueueProvider({ children }) {
         receiptId: item.id,
         previews: item.previews,
         onJob: (jobId) => updateItem(item.id, { jobId }),
+        onUploadProgress: (percent) =>
+          updateItem(item.id, {
+            // Sent: now waiting for the OCR result on the same request.
+            ...(percent >= 100
+              ? { status: "Processing", message: "Reading receipt…", progress: 0 }
+              : { message: `Uploading receipt… ${percent}%`, progress: percent }),
+          }),
         onStage: (stage, status) =>
           stage === "processing" &&
           status &&

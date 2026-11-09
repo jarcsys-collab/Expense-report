@@ -9,6 +9,8 @@ import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { expensesRouter } from "./routes/expenses.js";
 import { healthRouter } from "./routes/health.js";
+import { managementRouter } from "./routes/management.js";
+import { notificationsRouter } from "./routes/notifications.js";
 import { policyRouter } from "./routes/policy.js";
 import { receiptsRouter } from "./routes/receipts.js";
 import { violationsRouter } from "./routes/violations.js";
@@ -56,6 +58,8 @@ export function createApp() {
   app.use("/api/receipts", requireAuth, receiptsRouter);
   app.use("/api/violations", requireAuth, violationsRouter);
   app.use("/api/policy", requireAuth, policyRouter);
+  app.use("/api/notifications", requireAuth, notificationsRouter);
+  app.use("/api/management", requireAuth, managementRouter);
 
   app.use(notFound);
   app.use(errorHandler);

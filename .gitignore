@@ -1,9 +1,12 @@
 node_modules/
 dist/
+dist-staging/
 .env
 .env.local
 .env.*.local
 *.log
+# Browser test screenshots (npm run test:e2e)
+/test-results/
 
 # Backend secrets
 server/.env

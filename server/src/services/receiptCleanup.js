@@ -53,6 +53,7 @@ export async function cleanupAbandonedReceiptFiles({
     wouldDelete: 0,
     skippedReferenced: 0,
     skippedClaimed: 0,
+    sharedFileKept: 0,
     orphanFilesDeleted: 0,
     orphanFilesWouldDelete: 0,
     errors: 0,
@@ -75,6 +76,13 @@ export async function cleanupAbandonedReceiptFiles({
     try {
       if (await Expense.exists({ receiptJobId: job._id })) {
         summary.skippedReferenced += 1;
+        continue;
+      }
+      // Another scan of the same account reuses this stored file: this abandoned scan
+      // only lets go of it. The file stays until the last scan using it is cleaned up.
+      if (await ReceiptJob.exists({ fileId: job.fileId, _id: { $ne: job._id } })) {
+        summary.sharedFileKept += 1;
+        if (!dryRun) await ReceiptJob.updateOne({ _id: job._id, fileId: job.fileId }, { $unset: { fileId: 1 } });
         continue;
       }
       if (dryRun) {

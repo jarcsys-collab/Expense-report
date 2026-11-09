@@ -8,6 +8,7 @@ import "./styles/tokens.css";
 import "./styles/index.css";
 import "./styles/layout.css";
 import "./styles/mobile.css";
+import "./styles/management.css";
 
 // Apply the saved theme before the first render to avoid a flash of the wrong theme.
 applyTheme(getStoredTheme());

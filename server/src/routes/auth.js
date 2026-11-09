@@ -3,6 +3,7 @@ import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { HttpError } from "../middleware/errorHandler.js";
+import { canUseManagement, managementAllows } from "../middleware/managementAccess.js";
 import { requireDatabase } from "../middleware/requireDatabase.js";
 import { validate } from "../middleware/validate.js";
 import {
@@ -59,7 +60,7 @@ authRouter.post("/entra", entraLimiter, requireDatabase, validate({ body: entraS
     jobTitle: profile.jobTitle,
   };
   const sessionToken = await createSession(res, user, env.entra.sessionHours);
-  res.json({ user: { ...user, position: user.jobTitle }, profileSource: profile.profileSource, sessionToken, features: sessionFeatures() });
+  res.json({ user: { ...user, position: user.jobTitle }, profileSource: profile.profileSource, sessionToken, features: sessionFeatures(user) });
 });
 
 // ---------------------------------------------------------------------------
@@ -94,7 +95,7 @@ authRouter.post("/login", loginLimiter, requireDatabase, validate({ body: loginS
   await destroySession(req);
   const user = { id: BETA_USER.id, name: BETA_USER.name, role: BETA_USER.role, provider: "beta" };
   const sessionToken = await createSession(res, user, env.betaAuth.sessionHours);
-  res.json({ user, sessionToken, features: sessionFeatures() });
+  res.json({ user, sessionToken, features: sessionFeatures(user) });
 });
 
 // ---------------------------------------------------------------------------
@@ -102,14 +103,20 @@ authRouter.post("/login", loginLimiter, requireDatabase, validate({ body: loginS
 // ---------------------------------------------------------------------------
 
 // Server-controlled features the frontend may display (the server enforces them).
-const sessionFeatures = () => ({ approvalWorkflow: env.approvalWorkflowEnabled });
+const sessionFeatures = (user) => ({
+  approvalWorkflow: env.approvalWorkflowEnabled,
+  management: canUseManagement(user),
+  ocrAnalytics: managementAllows(user, "ocrAnalytics"),
+  // Google Document AI cannot read HEIC; the scanner explains this before uploading.
+  ocrAcceptsHeic: env.ocrProvider !== "google_document_ai",
+});
 
 // GET /api/auth/session: the signed-in user, or 401.
 authRouter.get("/session", async (req, res) => {
   const user = await resolveUser(req);
   if (!user) throw new HttpError(401, "UNAUTHENTICATED", "Sign in to continue.");
   // Server-controlled features (display only: the server enforces them).
-  res.json({ user, features: sessionFeatures() });
+  res.json({ user, features: sessionFeatures(user) });
 });
 
 // POST /api/auth/logout: deletes the server-side session and clears the cookie.
